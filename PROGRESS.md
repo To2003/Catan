@@ -9,7 +9,7 @@ y después este archivo.
 | ---- | ------------------------------------------ | ------------- |
 | M0   | Monorepo, TS strict, lint, format, Vitest  | ✅ Completado |
 | M1   | Generación de tablero y render SVG         | ✅ Completado |
-| M2   | Motor: setup, dados, producción, construir | ⬜ Pendiente  |
+| M2   | Motor: setup, dados, producción, construir | ✅ Completado |
 | M3   | 7, descarte, ladrón y robo                 | ⬜ Pendiente  |
 | M4   | Comercio con banco y puertos               | ⬜ Pendiente  |
 | M5   | Cartas de desarrollo, bonos y victoria     | ⬜ Pendiente  |
@@ -103,9 +103,108 @@ y después este archivo.
 
 ---
 
-## M2 — Motor: setup, dados, producción y construcción 🚧
+## M2 — Motor: setup, dados, producción y construcción ✅
 
-_En curso. Esta sección se completa al cerrar el hito._
+**Qué quedó hecho**
+
+- **Estado y acciones** (`types.ts`): `GameState`, `Player`, `Phase`, `Building`, `TradeOffer` y el
+  union `Action` **completo** del SPEC §5.3, aunque M2 implemente solo una parte.
+- **`createGame(seed, players)`**: tablero, orden de turnos sorteado y mazo de desarrollo
+  barajado, en ese orden de consumo del RNG.
+- **`applyAction(state, playerId, action)`**: valida una sola vez y después ejecuta. Nunca muta
+  el estado recibido y devuelve `DeepReadonly<GameState>` más la lista de eventos tipados.
+- **Setup en serpiente**: ronda 1 hacia adelante, ronda 2 hacia atrás, doble colocación en el
+  giro, y el camino saliendo del asentamiento recién puesto. El segundo asentamiento cobra.
+- **Dados y producción**: 2d6 del PRNG, producción por número con escasez del banco resuelta
+  recurso por recurso.
+- **Construcción**: camino, asentamiento y ciudad, con costos que **vuelven al banco** y el
+  asentamiento devuelto al stock al mejorar.
+- **Fin de turno y PV**: `endTurn` limpia los flags del turno y pasa el mando; `victoryPoints`
+  cuenta asentamientos y ciudades, con el chequeo de victoria en los dos momentos del §12.4.
+- **Hot-seat de debug** en la web, detrás de `?debug=1`.
+- 160 tests en verde, incluido el fuzz de partidas al azar y el snapshot de tablero de M1 intacto.
+
+**Qué NO está hecho a propósito:** ladrón, descarte, cartas de desarrollo, comercio, camino más
+largo, gran ejército, `view.ts` y el server. El **7 es un placeholder**: no produce, no descarta,
+no mueve nada y pasa a `main`, marcado `TODO(M3)` en `rules/dice.ts`.
+
+### Decisiones técnicas de M2
+
+1. **El log no vive en el estado** (cambio al SPEC §5.2). `applyAction` devuelve sus eventos y el
+   consumidor los acumula. Son dos razones: el estado ya se reconstruye con `seed` + acciones, y
+   como el reducer clona en cada acción, un log creciente volvería cuadrático cualquier recorrido
+   largo. En M6 el server filtra los eventos privados por jugador al emitirlos.
+2. **El reducer clona y muta el clon.** `structuredClone` de todo menos el tablero, que se pasa por
+   referencia porque es inmutable toda la partida. Lo que garantiza la pureza no es la convención:
+   los tests **congelan en profundidad** el estado de entrada, así que cualquier mutación tira
+   `TypeError` en vez de pasar desapercibida.
+3. **Hacia afuera el estado es `DeepReadonly<GameState>`**; adentro del reducer es mutable. Un solo
+   cast, en `cloneState`.
+4. **`legal.ts` no tiene reglas.** Enumera candidatos y los filtra con `validateAction`. El test de
+   propiedad recorre el tablero entero y verifica que estar en la lista de legales y ser aceptado
+   por `validate` sean lo mismo; se repite sobre estados reales de mitad de partida en el fuzz. Es
+   tautológico por construcción, y eso es justamente lo que blinda.
+5. **El puesto en la serpiente se deriva** de la fase y el orden de turnos. No hay un contador
+   aparte que se pueda desincronizar.
+6. **Una sola ruta de producción.** Los dados y el segundo asentamiento del setup pasan por el
+   mismo `claims → resolver contra el banco`, escasez incluida.
+7. **Los costos vuelven al banco.** El SPEC no lo dice explícitamente, pero es lo único consistente
+   con las 19 cartas por recurso, y es lo que hace verdadero el invariante de conservación.
+8. **El invariante de caminos es local**: cada camino comparte vértice con otro camino propio o con
+   un edificio propio. **No** es alcanzabilidad desde un edificio: un rival puede colocar
+   legalmente un asentamiento en medio de un camino largo y dejar parte de la red conectada solo a
+   través de un vértice bloqueado. Eso es una posición válida. "No pasar por un edificio ajeno" es
+   una regla de **construcción**, que se chequea al construir. Hay un test unitario con ese
+   escenario exacto (`build.test.ts`).
+9. **El mazo de desarrollo se baraja en `createGame`** aunque nadie robe hasta M5: meterlo después
+   habría corrido todas las tiradas de todas las semillas.
+10. **El hot-seat consume el engine, no reimplementa nada.** La web importa `applyAction` y `legal*`
+    y los usa directo, sin server. La regla "nada de reglas en la web" sigue intacta: la pantalla
+    pregunta qué es legal y manda acciones, no decide.
+
+### Fuzz test
+
+`test/fuzz.test.ts` juega partidas eligiendo al azar entre las acciones legales, con un RNG
+**separado** del de la partida. Después de **cada** acción verifica:
+
+1. Conservación: banco + manos = 19 por recurso.
+2. Piezas: stock + piezas en el tablero = totales iniciales, por jugador.
+3. Nada negativo, ni en el banco ni en las manos.
+4. Regla de distancia en todo el tablero.
+5. Todo camino conectado a la red propia (local, ver decisión 8).
+6. PV consistentes con lo construido.
+
+Además: **replay** exacto desde `seed` + lista de acciones, y el test de propiedad
+`legal ⟺ validate` remuestreado sobre estados reales.
+
+Sin comercio ni ladrón las partidas **se traban**: se corta a las 400 acciones y no se trata como
+error. Lo que sí es error es quedarse sin ninguna acción legal, que sería un deadlock del motor.
+
+`FUZZ_GAMES` ajusta cuántas partidas se juegan (25 por defecto, ~1 s; en local conviene subirlo):
+
+```bash
+FUZZ_GAMES=500 pnpm --filter @tierra-austral/engine test fuzz
+```
+
+### Hot-seat de debug
+
+```bash
+pnpm dev   # y abrir http://localhost:5173/?debug=1
+```
+
+Opcional: `&seed=20260918` para repetir un tablero, `&ids=1` (o la tecla del botón "IDs") para el
+overlay de vértices y aristas. Tiene la mano del jugador activo, el banco, los PV, las jugadas
+legales resaltadas y clickeables, y el log de eventos crudo. El "jugador actual" **sigue
+automáticamente** al que tiene el turno; un selector manual recién suma en M3, con el descarte
+simultáneo.
+
+### Cambios al SPEC en M2
+
+- **§5.2**: se elimina el campo `log` de `GameState`, con el porqué.
+- **§6**: el bullet de `view.ts` ahora habla de eventos emitidos, no del log del estado.
+- **§12.11**: pasa a cubrir el orden de consumo del RNG **completo** (tablero → orden de turnos →
+  mazo → dados), no solo la generación del tablero. El robo del ladrón queda reservado como paso 8
+  para M3.
 
 ### Deuda técnica anotada
 
@@ -114,6 +213,9 @@ _En curso. Esta sección se completa al cerrar el hito._
   existe. Al cerrar M5 hay que agregar un test que verifique que **ninguna** acción devuelve
   ese código, y recién después eliminarlo de `ErrorCode`. Si el código sobrevive al hito, es
   que quedó un handler sin escribir.
+- **M3 — el 7.** `rules/dice.ts` tiene el `TODO(M3)`: hoy una tirada de 7 no produce nada y pasa
+  directo a `main`. Cuando entre el ladrón hay que sacar ese atajo y encadenar
+  `discard → moveRobber → steal`.
 
 ---
 
