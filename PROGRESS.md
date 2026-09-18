@@ -8,7 +8,7 @@ y después este archivo.
 | Hito | Contenido                                  | Estado        |
 | ---- | ------------------------------------------ | ------------- |
 | M0   | Monorepo, TS strict, lint, format, Vitest  | ✅ Completado |
-| M1   | Generación de tablero y render SVG         | ⬜ Pendiente  |
+| M1   | Generación de tablero y render SVG         | ✅ Completado |
 | M2   | Motor: setup, dados, producción, construir | ⬜ Pendiente  |
 | M3   | 7, descarte, ladrón y robo                 | ⬜ Pendiente  |
 | M4   | Comercio con banco y puertos               | ⬜ Pendiente  |
@@ -64,6 +64,42 @@ y después este archivo.
 - **M8 — build del server para producción.** Como el server importa el engine por source,
   `node dist/index.js` no alcanza: hay que bundlear (tsup/esbuild) o correrlo con `tsx`.
   Decidir al momento del deploy.
+
+---
+
+## M1 — Tablero: geometría, generación y render ✅
+
+**Qué quedó hecho**
+
+- **Geometría** (`board/geometry.ts`): topología radio 2 _pointy-top_ en espacio unitario. 19 hexes en filas 3-4-5-4-3, cuyas esquinas deduplican a 54 vértices y 72 aristas.
+- **Layout** (`board/layout.ts`): recorrido horario de las 30 aristas de costa y las 9 posiciones de puerto, calculadas y no hardcodeadas.
+- **Generación** (`board/generate.ts`): `generateBoard(seed)` con terrenos, las 18 fichas numéricas con retry por rojas adyacentes, tipos de puerto y el ladrón en el desierto.
+- **Render SVG**: tablero, fichas (6 y 8 en rojo, con puntos de probabilidad), puertos con muelle y badge, ladrón, y overlay de IDs para debug.
+- 70 tests en verde, incluido el snapshot de tablero de la semilla `20260918`.
+
+**Qué NO está hecho a propósito:** no hay interacción. No se puede clickear nada, no hay jugadores ni `GameState`. Eso es M2.
+
+### Decisiones técnicas de M1
+
+1. **Espacio unitario, no píxeles.** La geometría usa circunradio 1 y el `viewBox` del SVG hace toda la escala. El motor nunca sabe cuán grande se dibuja el tablero.
+2. **Dedupe por cuantización a 1e-4**, no por igualdad de floats. El margen es de 5000x: en espacio unitario dos vértices distintos nunca están a menos de 0.5. Hay un test que mide ese margen, así que si alguien toca la geometría y lo achica, salta.
+3. **IDs deterministas**: hexes por fila, vértices de arriba a abajo y después de izquierda a derecha, aristas por par de vértices. El snapshot depende de este orden.
+4. **Los puertos se calculan.** El recorrido arranca en la arista de costa con el punto medio más alto y, si empata, el más a la izquierda (SPEC §12.10). Se definió por punto medio porque un hex pointy-top no tiene arista superior: tiene un vértice arriba. `PORT_START_OFFSET` queda en 0, verificado en pantalla: los 9 puertos quedan bien repartidos y no hizo falta rotarlos.
+5. **El orden de consumo del RNG es contrato** (SPEC §12.11): terrenos, después números con sus reintentos, después tipos de puerto. El snapshot lo blinda.
+6. **En el retry se remezclan solo los números**, los terrenos quedan fijos. Tope de 1000 intentos que tira error en vez de colgarse; verificado sobre 500 semillas.
+7. **La geometría se memoiza.** Es una constante pura: la misma computación siempre, sin dependencia del estado ni del RNG.
+8. **El tablero es inmutable.** `generateBoard` devuelve la posición inicial del ladrón por separado, porque el ladrón vive en `GameState.robberHex` (SPEC §5.2).
+9. **`?ids=1` además de la tecla D.** El overlay de debug se puede activar por URL, así el link se comparte y además se puede verificar en un browser headless.
+
+### Cambios al SPEC en M1
+
+- **§5.1**: `BoardGraph` suma `ports`, `hexIds`, `vertexIds` y `edgeIds`, más el tipo `Port`. El puerto se guarda de los dos lados: en sus 2 vértices (lo que leen las reglas) y en el array `ports` con la arista (lo que necesita el render).
+- **§12.10**: layout de los puertos y recorrido del perímetro.
+- **§12.11**: orden de consumo del RNG en la generación.
+
+### Infra
+
+- **CI** (`.github/workflows/ci.yml`): typecheck, lint, format:check y test en cada push y PR.
 
 ---
 
