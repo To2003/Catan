@@ -5,12 +5,14 @@ import {
   legalRoadSpots,
   legalSettlementSpots,
   type Action,
+  type EdgeId,
   type GameEvent,
   type GameState,
   type PlayerSeat,
   type ReadonlyGameState,
   type Resource,
   type ResourceBundle,
+  type VertexId,
 } from '../src/index.js';
 
 /** Indexing an array is `T | undefined` under noUncheckedIndexedAccess. */
@@ -98,17 +100,99 @@ export const applyOrThrow = (
   return { state: result.state, events: result.events };
 };
 
-/** Plays the whole setup, always taking the first legal spot. */
-export const runSetup = (start: ReadonlyGameState = newGame()): ReadonlyGameState => {
+/**
+ * Plays the whole setup. `choose` picks among the legal spots; the default
+ * takes the middle one, which spreads the placements out instead of piling
+ * them into one corner of the board the way index 0 does.
+ */
+export const runSetup = (
+  start: ReadonlyGameState = newGame(),
+  choose: (count: number) => number = (count) => Math.floor(count / 2),
+): ReadonlyGameState => {
   let state = start;
   for (let guard = 0; state.phase.kind === 'setup'; guard += 1) {
     if (guard > 50) throw new Error('setup did not finish');
     const player = state.currentPlayer;
+    const spots: readonly string[] =
+      state.phase.step === 'settlement'
+        ? legalSettlementSpots(state, player)
+        : legalRoadSpots(state, player);
+    const index = choose(spots.length);
     const action: Action =
       state.phase.step === 'settlement'
-        ? { type: 'placeSettlement', vertex: at(legalSettlementSpots(state, player), 0) }
-        : { type: 'placeRoad', edge: at(legalRoadSpots(state, player), 0) };
+        ? { type: 'placeSettlement', vertex: at(legalSettlementSpots(state, player), index) }
+        : { type: 'placeRoad', edge: at(legalRoadSpots(state, player), index) };
     state = applyOrThrow(state, player, action).state;
   }
   return state;
+};
+
+export interface FreePath {
+  readonly edges: EdgeId[];
+  /** The vertices walked through, starting with `from`. */
+  readonly vertices: VertexId[];
+}
+
+/**
+ * A path of `length` free edges out of `from`, optionally one that satisfies
+ * `accept`. The search keeps going when a path is rejected, so callers can ask
+ * for a path with a particular shape.
+ */
+export const findFreePath = (
+  state: ReadonlyGameState,
+  from: VertexId,
+  length: number,
+  accept: (path: FreePath) => boolean = () => true,
+): FreePath | undefined => {
+  const walk = (vertex: VertexId, edges: EdgeId[], vertices: VertexId[]): FreePath | undefined => {
+    if (edges.length === length) {
+      const path = { edges, vertices };
+      return accept(path) ? path : undefined;
+    }
+    const node = state.board.vertices[vertex];
+    for (const edge of node?.edges ?? []) {
+      if (state.roads[edge] !== undefined || edges.includes(edge)) continue;
+      const link = state.board.edges[edge];
+      if (!link) continue;
+      const [a, b] = link.vertices;
+      const next = a === vertex ? b : a;
+      if (vertices.includes(next)) continue;
+      const found = walk(next, [...edges, edge], [...vertices, next]);
+      if (found) return found;
+    }
+    return undefined;
+  };
+  return walk(from, [], [from]);
+};
+
+/**
+ * The board invariant for roads: every road shares a vertex with another road
+ * of its owner, or with one of their buildings. It is deliberately *local* and
+ * says nothing about rival buildings blocking the way — a rival may settle in
+ * the middle of a long road and leave part of the network reachable only
+ * through that vertex, which is a legal position (SPEC.md §4.4).
+ */
+export const everyRoadTouchesOwnNetwork = (state: ReadonlyGameState): boolean =>
+  Object.entries(state.roads).every(([edge, owner]) => {
+    const link = state.board.edges[edge as `e${number}`];
+    if (!link) return false;
+    return link.vertices.some((vertex) => {
+      if (state.buildings[vertex]?.owner === owner) return true;
+      const node = state.board.vertices[vertex];
+      return (node?.edges ?? []).some((other) => other !== edge && state.roads[other] === owner);
+    });
+  });
+
+/** Builds roads until the player has somewhere legal to settle. */
+export const extendUntilSettlementSpot = (
+  state: ReadonlyGameState,
+  playerId: string,
+): ReadonlyGameState => {
+  let current = state;
+  for (let guard = 0; legalSettlementSpots(current, playerId).length === 0; guard += 1) {
+    if (guard > 10) throw new Error('no settlement spot opened up');
+    const edge = at(legalRoadSpots(current, playerId), 0);
+    current = applyOrThrow(current, playerId, { type: 'placeRoad', edge }).state;
+  }
+  return current;
 };

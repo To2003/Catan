@@ -1,4 +1,5 @@
 import type { GameEvent } from './events.js';
+import { buildRoad, buildSettlement, upgradeToCity } from './rules/build.js';
 import { placeSetupRoad, placeSetupSettlement } from './rules/setup.js';
 import type { Action, ErrorCode, GameState, PlayerId, ReadonlyGameState } from './types.js';
 import { validateAction } from './validate.js';
@@ -41,20 +42,19 @@ export const applyAction = (
 
   switch (action.type) {
     case 'placeSettlement':
-      if (draft.phase.kind === 'setup') {
+      if (draft.phase.kind === 'setup')
         placeSetupSettlement(draft, playerId, action.vertex, events);
-        break;
-      }
-      // TODO(M2): building outside setup lands with rules/build.ts. Unreachable
-      // for now: nothing reaches the main phase yet.
-      return { ok: false, error: 'NOT_IMPLEMENTED' };
+      else buildSettlement(draft, playerId, action.vertex, events);
+      break;
 
     case 'placeRoad':
-      if (draft.phase.kind === 'setup') {
-        placeSetupRoad(draft, playerId, action.edge, events);
-        break;
-      }
-      return { ok: false, error: 'NOT_IMPLEMENTED' };
+      if (draft.phase.kind === 'setup') placeSetupRoad(draft, playerId, action.edge, events);
+      else buildRoad(draft, playerId, action.edge, events);
+      break;
+
+    case 'upgradeCity':
+      upgradeToCity(draft, playerId, action.vertex, events);
+      break;
 
     default:
       return { ok: false, error: 'NOT_IMPLEMENTED' };
