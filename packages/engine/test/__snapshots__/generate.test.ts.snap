@@ -1,0 +1,35 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`generateBoard > matches the recorded board for seed 20260918 1`] = `
+"HEXES
+h0 (0,-2) forest 6
+h1 (1,-2) mountains 9
+h2 (2,-2) pasture 8
+h3 (-1,-1) mountains 4
+h4 (0,-1) desert
+h5 (1,-1) hills 9
+h6 (2,-1) fields 3
+h7 (-2,0) fields 11
+h8 (-1,0) fields 10
+h9 (0,0) fields 8
+h10 (1,0) hills 11
+h11 (2,0) pasture 3
+h12 (-2,1) forest 5
+h13 (-1,1) forest 10
+h14 (0,1) pasture 12
+h15 (1,1) pasture 2
+h16 (-2,2) mountains 4
+h17 (-1,2) forest 6
+h18 (0,2) hills 5
+
+PORTS
+e0 ore [v0, v3]
+e3 brick [v1, v5]
+e9 3:1 [v6, v10]
+e38 3:1 [v26, v32]
+e61 3:1 [v42, v46]
+e70 wheat [v49, v53]
+e66 3:1 [v47, v51]
+e49 sheep [v33, v38]
+e23 wood [v16, v21]"
+`;

@@ -240,8 +240,24 @@ interface BoardGraph {
     }
   >;
   edges: Record<EdgeId, { vertices: [VertexId, VertexId]; hexes: HexId[] }>;
+  ports: Port[];
+  // Ids en orden canónico, para iterar de forma determinista.
+  hexIds: HexId[];
+  vertexIds: VertexId[];
+  edgeIds: EdgeId[];
+}
+
+interface Port {
+  edge: EdgeId;
+  type: PortType;
+  vertices: [VertexId, VertexId];
 }
 ```
+
+- Un puerto ocupa una **arista**, pero la regla de comercio se consulta desde el **vértice** donde hay un edificio. Por eso el puerto se guarda de los dos lados: `port` en cada uno de sus 2 vértices (lo que leen las reglas) y el array `ports` con la arista (lo que necesita el render para dibujar el muelle y orientarlo).
+- El tablero es **inmutable** durante toda la partida. El ladrón no vive acá: vive en `GameState.robberHex` (§5.2).
+- Las posiciones se calculan en **espacio unitario** (circunradio del hex = 1), con `y` creciendo hacia abajo como en SVG. El render deriva su `viewBox` del bounding box, así que la escala en píxeles nunca entra al motor.
+- La deduplicación de vértices **redondea a una grilla de 1e-4** en vez de comparar floats. El margen es amplio: en espacio unitario dos vértices distintos nunca están a menos de 0.5.
 
 ### 5.2 Tipos principales
 
@@ -559,3 +575,24 @@ Si hay **al menos 1 candidato** válido, el robo es **obligatorio**: la fase `st
 - El ladrón arranca en el **desierto**.
 - **Terrenos y números se mezclan al azar** (no se usa el espiral fijo), con regeneración si quedan 6 y 8 adyacentes.
 - Las **posiciones** de los 9 puertos son fijas; sus **tipos** se mezclan.
+
+### 12.10 Layout de los puertos y recorrido del perímetro
+
+Las posiciones de los puertos **no se hardcodean**: se calculan.
+
+1. Se toman las **30 aristas del perímetro**: las que tocan un solo hex.
+2. Se las recorre en **sentido horario** formando un ciclo.
+3. El recorrido arranca en la arista de perímetro cuyo **punto medio tiene la `y` más chica** y, si hay empate, la **`x` más chica**. En el tablero radio 2 eso es la arista superior-izquierda del hex de arriba a la izquierda (`q=0, r=-2`). La regla se define por punto medio y no por nombre porque un hex _pointy-top_ **no tiene arista superior**: tiene un vértice arriba.
+4. Los puertos van en los índices `0, 3, 6, 10, 13, 16, 20, 23, 26` de ese recorrido (saltos de 3, 3, 4 repetidos, que suman 30). Como ningún salto baja de 2, **dos puertos nunca comparten un vértice**: quedan 18 vértices con puerto.
+5. `PORT_START_OFFSET` rota todos los puertos a lo largo de la costa. Es puramente cosmético: los invariantes valen con cualquier offset.
+6. Los **tipos** (4 genéricos y 5 de 2:1, uno por recurso) se mezclan con el RNG de la partida.
+
+### 12.11 Orden de consumo del RNG en la generación
+
+El orden es **parte del contrato**, porque de él depende el test de snapshot:
+
+1. **Terrenos** — un Fisher-Yates sobre la bolsa de terrenos.
+2. **Números** — un shuffle por intento, reintentando hasta que no queden dos fichas rojas adyacentes. Los terrenos **no** se remezclan entre intentos.
+3. **Tipos de puerto** — un shuffle de los 9 tipos.
+
+Si ese orden cambia, cambian todos los tableros de todas las semillas y el snapshot se rompe a propósito. Se actualiza de forma consciente, nunca regrabándolo a ciegas.
