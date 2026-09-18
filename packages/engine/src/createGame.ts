@@ -10,7 +10,15 @@ import {
 } from './constants.js';
 import { generateBoard } from './board/generate.js';
 import { shuffle } from './rng.js';
-import type { DevCard, GameState, Player, PlayerId, PlayerSeat, ResourceBundle } from './types.js';
+import type {
+  DevCard,
+  GameState,
+  Player,
+  PlayerId,
+  PlayerSeat,
+  ReadonlyGameState,
+  ResourceBundle,
+} from './types.js';
 
 /**
  * Starting a game.
@@ -75,7 +83,7 @@ const validateSeats = (seats: readonly PlayerSeat[]): void => {
  * Builds the opening state: board, seats, turn order and a shuffled dev deck,
  * with the first player about to place their first settlement.
  */
-export const createGame = (seed: number, seats: readonly PlayerSeat[]): GameState => {
+export const createGame = (seed: number, seats: readonly PlayerSeat[]): ReadonlyGameState => {
   validateSeats(seats);
 
   // 1. Board.

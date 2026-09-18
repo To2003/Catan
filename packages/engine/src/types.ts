@@ -58,6 +58,15 @@ export type ErrorCode =
   /** The action exists in the union but its milestone has not landed yet. */
   | 'NOT_IMPLEMENTED';
 
+/**
+ * Recursively readonly. The engine hands state out as `DeepReadonly<GameState>`
+ * so no consumer can mutate a state it was given; inside the reducer the draft
+ * is a plain mutable GameState (SPEC.md §6).
+ */
+export type DeepReadonly<T> = T extends object
+  ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
+  : T;
+
 /** Result of any engine operation that can legally fail. */
 export type Result<T> = { ok: true; value: T } | { ok: false; error: ErrorCode };
 
@@ -272,3 +281,6 @@ export type Action =
   | { readonly type: 'endTurn' };
 
 export type ActionType = Action['type'];
+
+/** A game state as handed to the outside world: nothing in it can be mutated. */
+export type ReadonlyGameState = DeepReadonly<GameState>;

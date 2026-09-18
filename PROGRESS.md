@@ -103,6 +103,20 @@ y después este archivo.
 
 ---
 
+## M2 — Motor: setup, dados, producción y construcción 🚧
+
+_En curso. Esta sección se completa al cerrar el hito._
+
+### Deuda técnica anotada
+
+- **M5 — sacar `NOT_IMPLEMENTED`.** Mientras el union `Action` esté completo pero falten
+  hitos, `validate.ts` rechaza con `NOT_IMPLEMENTED` las acciones cuyo handler todavía no
+  existe. Al cerrar M5 hay que agregar un test que verifique que **ninguna** acción devuelve
+  ese código, y recién después eliminarlo de `ErrorCode`. Si el código sobrevive al hito, es
+  que quedó un handler sin escribir.
+
+---
+
 ## Aclaraciones de reglas resueltas
 
 Las respuestas a las ambigüedades del spec están incorporadas a

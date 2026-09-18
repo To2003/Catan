@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ANA, BRUNO, CATA, SEATS, SEED, at } from './helpers.js';
 import {
   BANK_RESOURCE_COUNT,
   DEV_DECK_COMPOSITION,
@@ -9,24 +10,7 @@ import {
   generateBoard,
   shuffle,
   type DevCard,
-  type PlayerSeat,
 } from '../src/index.js';
-
-const ANA: PlayerSeat = { id: 'p1', name: 'Ana', color: 'celeste' };
-const BRUNO: PlayerSeat = { id: 'p2', name: 'Bruno', color: 'bordo' };
-const CATA: PlayerSeat = { id: 'p3', name: 'Cata', color: 'verde' };
-const DANTE: PlayerSeat = { id: 'p4', name: 'Dante', color: 'amarillo' };
-
-const SEATS: readonly PlayerSeat[] = [ANA, BRUNO, CATA, DANTE];
-
-/** Indexing into an array is `T | undefined` under noUncheckedIndexedAccess. */
-const at = <T>(items: readonly T[], index: number): T => {
-  const item = items[index];
-  if (item === undefined) throw new Error(`no item at index ${index}`);
-  return item;
-};
-
-const SEED = 20260918;
 
 describe('createGame', () => {
   it('rejects a seat count outside 3-4', () => {
@@ -110,10 +94,12 @@ describe('createGame', () => {
     }
   });
 
-  it('gives each player their own stock object', () => {
+  it('gives each player their own stock and resource objects, never a shared one', () => {
     const game = createGame(SEED, SEATS);
-    at(game.players, 0).stock.roads -= 1;
-    expect(at(game.players, 1).stock.roads).toBe(PIECE_STOCK.roads);
+    const first = at(game.players, 0);
+    const second = at(game.players, 1);
+    expect(first.stock).not.toBe(second.stock);
+    expect(first.resources).not.toBe(second.resources);
   });
 
   it('fills the bank with 19 of each resource', () => {

@@ -4,3 +4,5 @@ export * from './rng.js';
 export * from './board/index.js';
 export * from './events.js';
 export * from './createGame.js';
+export * from './validate.js';
+export * from './legal.js';
