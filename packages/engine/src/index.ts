@@ -7,3 +7,4 @@ export * from './createGame.js';
 export * from './validate.js';
 export * from './legal.js';
 export * from './reducer.js';
+export * from './rules/victory.js';

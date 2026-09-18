@@ -144,8 +144,10 @@ describe('production', () => {
   });
 
   it('produces nothing on a 7 and moves on to main (placeholder until M3)', () => {
+    // A handful of settlements spread over the board, so there is plenty that
+    // could have produced — but not enough points to end the game.
     const before = stateRolling(7, (s) => {
-      for (const hex of s.board.hexIds) {
+      for (const hex of s.board.hexIds.slice(0, 3)) {
         const corner = s.board.hexes[hex]?.corners[0];
         if (corner) s.buildings[corner] = { owner: ANA.id, type: 'settlement' };
       }

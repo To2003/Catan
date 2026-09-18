@@ -1,6 +1,8 @@
 import type { GameEvent } from './events.js';
 import { buildRoad, buildSettlement, upgradeToCity } from './rules/build.js';
 import { rollDice } from './rules/dice.js';
+import { endTurn } from './rules/turn.js';
+import { checkVictory } from './rules/victory.js';
 import { placeSetupRoad, placeSetupSettlement } from './rules/setup.js';
 import type { Action, ErrorCode, GameState, PlayerId, ReadonlyGameState } from './types.js';
 import { validateAction } from './validate.js';
@@ -61,9 +63,17 @@ export const applyAction = (
       rollDice(draft, playerId, events);
       break;
 
+    case 'endTurn':
+      endTurn(draft, playerId, events);
+      break;
+
     default:
       return { ok: false, error: 'NOT_IMPLEMENTED' };
   }
+
+  // Victory is checked after every action of the active player (SPEC.md §12.4);
+  // the start-of-turn check lives in endTurn.
+  checkVictory(draft, playerId, events);
 
   draft.version += 1;
   return { ok: true, state: draft, events };
