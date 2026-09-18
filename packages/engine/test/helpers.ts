@@ -1,6 +1,11 @@
 import { expect } from 'vitest';
 import {
+  applyAction,
   createGame,
+  legalRoadSpots,
+  legalSettlementSpots,
+  type Action,
+  type GameEvent,
   type GameState,
   type PlayerSeat,
   type ReadonlyGameState,
@@ -80,4 +85,30 @@ export const totalOf = (state: ReadonlyGameState, resource: Resource): number =>
 export const expectOk = <T extends { ok: boolean }>(result: T): Extract<T, { ok: true }> => {
   expect(result).toMatchObject({ ok: true });
   return result as Extract<T, { ok: true }>;
+};
+
+/** Applies an action, failing the test if the engine rejected it. */
+export const applyOrThrow = (
+  state: ReadonlyGameState,
+  playerId: string,
+  action: Action,
+): { state: ReadonlyGameState; events: readonly GameEvent[] } => {
+  const result = applyAction(deepFreeze(state), playerId, action);
+  if (!result.ok) throw new Error(`${action.type} rejected: ${result.error}`);
+  return { state: result.state, events: result.events };
+};
+
+/** Plays the whole setup, always taking the first legal spot. */
+export const runSetup = (start: ReadonlyGameState = newGame()): ReadonlyGameState => {
+  let state = start;
+  for (let guard = 0; state.phase.kind === 'setup'; guard += 1) {
+    if (guard > 50) throw new Error('setup did not finish');
+    const player = state.currentPlayer;
+    const action: Action =
+      state.phase.step === 'settlement'
+        ? { type: 'placeSettlement', vertex: at(legalSettlementSpots(state, player), 0) }
+        : { type: 'placeRoad', edge: at(legalRoadSpots(state, player), 0) };
+    state = applyOrThrow(state, player, action).state;
+  }
+  return state;
 };

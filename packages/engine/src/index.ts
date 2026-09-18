@@ -6,3 +6,4 @@ export * from './events.js';
 export * from './createGame.js';
 export * from './validate.js';
 export * from './legal.js';
+export * from './reducer.js';
