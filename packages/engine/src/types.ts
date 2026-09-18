@@ -1,7 +1,9 @@
 /**
- * Base domain types shared by the engine, the server and the web client.
- * Rule-specific state (GameState, Action, Phase...) lands in later milestones.
+ * Types shared by the engine, the server and the web client: the board domain,
+ * the game state (SPEC.md §5.2) and the action union (SPEC.md §5.3).
  */
+
+import type { RngState } from './rng.js';
 
 export type Resource = 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore';
 
@@ -38,7 +40,23 @@ export type ErrorCode =
   | 'INSUFFICIENT_RESOURCES'
   | 'DISTANCE_RULE'
   | 'NOT_CONNECTED'
-  | 'STALE_STATE';
+  | 'STALE_STATE'
+  /** The piece stock for that building type is empty (SPEC.md §4.2). */
+  | 'NOT_ENOUGH_PIECES'
+  /** A building or road is already on that vertex or edge. */
+  | 'OCCUPIED'
+  /** Upgrading a vertex that holds no settlement. */
+  | 'NO_SETTLEMENT'
+  /** The piece on that spot belongs to somebody else. */
+  | 'NOT_OWNER'
+  /** Upgrading a vertex that already holds a city. */
+  | 'ALREADY_CITY'
+  /** An id that is not on the board, or a player that is not in the game. */
+  | 'INVALID_TARGET'
+  /** The game is already decided; no further actions apply. */
+  | 'GAME_OVER'
+  /** The action exists in the union but its milestone has not landed yet. */
+  | 'NOT_IMPLEMENTED';
 
 /** Result of any engine operation that can legally fail. */
 export type Result<T> = { ok: true; value: T } | { ok: false; error: ErrorCode };
@@ -106,3 +124,151 @@ export interface BoardGraph {
   readonly vertexIds: readonly VertexId[];
   readonly edgeIds: readonly EdgeId[];
 }
+
+/* ------------------------------------------------------------------ *
+ * Game state (SPEC.md §5.2)
+ *
+ * These interfaces are deliberately mutable. `applyAction` structuredClones
+ * the state it receives and mutates the clone, so the caller's state is never
+ * touched; the tests deep-freeze their input to prove it. Making the whole
+ * tree readonly would only push casts into every handler.
+ *
+ * The board is the exception: it is generated once and shared by reference
+ * across every state, so it stays deeply readonly.
+ * ------------------------------------------------------------------ */
+
+/** A seat as handed to `createGame`, before the turn order is drawn. */
+export interface PlayerSeat {
+  readonly id: PlayerId;
+  readonly name: string;
+  readonly color: PlayerColor;
+}
+
+export interface Player {
+  readonly id: PlayerId;
+  readonly name: string;
+  readonly color: PlayerColor;
+  resources: ResourceBundle;
+  /** In hand. Hidden from other players by view.ts (M6). */
+  devCards: DevCard[];
+  /** Bought this turn, so they cannot be played yet (SPEC.md §4.10). */
+  devCardsBoughtThisTurn: DevCard[];
+  knightsPlayed: number;
+  stock: { roads: number; settlements: number; cities: number };
+  connected: boolean;
+}
+
+export interface Building {
+  owner: PlayerId;
+  type: 'settlement' | 'city';
+}
+
+export type Phase =
+  | { readonly kind: 'lobby' }
+  | {
+      readonly kind: 'setup';
+      readonly round: 1 | 2;
+      readonly step: 'settlement' | 'road';
+      /** The settlement just placed: the setup road must start from it (SPEC.md §4.5). */
+      readonly lastSettlement?: VertexId;
+    }
+  | { readonly kind: 'preRoll' }
+  | { readonly kind: 'discard'; readonly pending: Readonly<Record<PlayerId, number>> }
+  | {
+      readonly kind: 'moveRobber';
+      readonly source: 'seven' | 'knight';
+      readonly returnTo: 'preRoll' | 'main';
+    }
+  | {
+      readonly kind: 'steal';
+      readonly candidates: readonly PlayerId[];
+      readonly returnTo: 'preRoll' | 'main';
+    }
+  | { readonly kind: 'main' }
+  | { readonly kind: 'roadBuilding'; readonly remaining: 1 | 2 }
+  | { readonly kind: 'gameOver'; readonly winner: PlayerId };
+
+export interface TradeOffer {
+  readonly id: string;
+  /** Who proposed it. */
+  readonly from: PlayerId;
+  readonly give: Partial<ResourceBundle>;
+  readonly want: Partial<ResourceBundle>;
+  readonly to: readonly PlayerId[];
+  responses: Record<PlayerId, 'pending' | 'accepted' | 'rejected'>;
+  /** Set when this offer is a counteroffer (SPEC.md §12.6). */
+  readonly parentOfferId?: string;
+}
+
+/**
+ * The whole game. Reconstructible from `seed` plus the list of applied actions,
+ * which is why there is no log in here: `applyAction` returns its events and the
+ * consumer accumulates them (SPEC.md §5.2, §6).
+ */
+export interface GameState {
+  /** Incremented on every applied action. The client sends it back as `expectedVersion`. */
+  version: number;
+  readonly seed: number;
+  rngState: RngState;
+  readonly board: BoardGraph;
+  robberHex: HexId;
+  buildings: Record<VertexId, Building>;
+  roads: Record<EdgeId, PlayerId>;
+  players: Player[];
+  /** Drawn once at `createGame`; setup round 2 walks it backwards. */
+  readonly turnOrder: readonly PlayerId[];
+  currentPlayer: PlayerId;
+  phase: Phase;
+  lastRoll?: [number, number];
+  bank: ResourceBundle;
+  devDeck: DevCard[];
+  devCardPlayedThisTurn: boolean;
+  tradeOffers: TradeOffer[];
+  largestArmy?: PlayerId;
+  longestRoad?: { owner: PlayerId; length: number };
+}
+
+/* ------------------------------------------------------------------ *
+ * Actions (SPEC.md §5.3)
+ *
+ * The union is complete from M2 on, even though M2 only implements setup,
+ * dice, production, building and end of turn. Everything else is rejected by
+ * validate.ts until its milestone lands.
+ * ------------------------------------------------------------------ */
+
+export type Action =
+  | { readonly type: 'placeSettlement'; readonly vertex: VertexId }
+  | { readonly type: 'placeRoad'; readonly edge: EdgeId }
+  | { readonly type: 'upgradeCity'; readonly vertex: VertexId }
+  | { readonly type: 'rollDice' }
+  | { readonly type: 'discard'; readonly cards: Partial<ResourceBundle> }
+  | { readonly type: 'moveRobber'; readonly hex: HexId }
+  | { readonly type: 'steal'; readonly target: PlayerId }
+  | { readonly type: 'buyDevCard' }
+  | { readonly type: 'playKnight' }
+  | { readonly type: 'playRoadBuilding' }
+  | { readonly type: 'playYearOfPlenty'; readonly resources: readonly [Resource, Resource] }
+  | { readonly type: 'playMonopoly'; readonly resource: Resource }
+  | { readonly type: 'maritimeTrade'; readonly give: Resource; readonly want: Resource }
+  | {
+      readonly type: 'createOffer';
+      readonly give: Partial<ResourceBundle>;
+      readonly want: Partial<ResourceBundle>;
+      readonly to: readonly PlayerId[] | 'all';
+    }
+  | {
+      readonly type: 'respondOffer';
+      readonly offerId: string;
+      readonly response: 'accept' | 'reject';
+    }
+  | {
+      readonly type: 'counterOffer';
+      readonly offerId: string;
+      readonly give: Partial<ResourceBundle>;
+      readonly want: Partial<ResourceBundle>;
+    }
+  | { readonly type: 'confirmTrade'; readonly offerId: string; readonly withPlayer: PlayerId }
+  | { readonly type: 'cancelOffer'; readonly offerId: string }
+  | { readonly type: 'endTurn' };
+
+export type ActionType = Action['type'];

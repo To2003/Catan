@@ -319,9 +319,17 @@ interface GameState {
   tradeOffers: TradeOffer[];
   largestArmy?: PlayerId;
   longestRoad?: { owner: PlayerId; length: number };
-  log: LogEntry[];
 }
+```
 
+**El log no vive en el estado.** `applyAction` devuelve sus eventos y el consumidor los acumula: el hot-seat de debug ahora, el server en M6. Son dos razones:
+
+- **Redundancia:** el estado se reconstruye con `seed` + la lista de acciones, así que un log adentro sería una segunda fuente de verdad.
+- **Costo:** `applyAction` clona el estado en cada acción; un log que crece sin parar volvería cuadrático cualquier recorrido largo (el fuzz test, un replay).
+
+En M6 el server filtra los eventos privados por jugador al emitirlos, que es el mismo criterio de `view.ts` aplicado al flujo de eventos en vez de al estado.
+
+```ts
 interface TradeOffer {
   id: string;
   from: PlayerId; // quién propone
@@ -380,7 +388,7 @@ type Action =
   - muestra tus recursos y tus cartas de desarrollo en detalle;
   - de los demás jugadores muestra solo cuántas cartas de recursos y cuántas de desarrollo tienen;
   - oculta el orden del mazo, el `rngState` y las cartas de PV ajenas;
-  - en el log, muestra el recurso robado solo al que roba y al robado.
+  - en los eventos emitidos, muestra el recurso robado solo al que roba y al robado.
 - **Event sourcing:** se guarda `seed` más la lista de acciones aplicadas. Reproducirlas reconstruye el estado exacto, lo que sirve para persistencia, debugging y replays.
 
 ### Algoritmo de camino más largo
@@ -587,12 +595,25 @@ Las posiciones de los puertos **no se hardcodean**: se calculan.
 5. `PORT_START_OFFSET` rota todos los puertos a lo largo de la costa. Es puramente cosmético: los invariantes valen con cualquier offset.
 6. Los **tipos** (4 genéricos y 5 de 2:1, uno por recurso) se mezclan con el RNG de la partida.
 
-### 12.11 Orden de consumo del RNG en la generación
+### 12.11 Orden de consumo del RNG
 
-El orden es **parte del contrato**, porque de él depende el test de snapshot:
+El orden es **parte del contrato**: de él dependen el test de snapshot del tablero y la reproducción de una partida a partir de `seed` + acciones.
+
+**En `generateBoard(seed)`:**
 
 1. **Terrenos** — un Fisher-Yates sobre la bolsa de terrenos.
 2. **Números** — un shuffle por intento, reintentando hasta que no queden dos fichas rojas adyacentes. Los terrenos **no** se remezclan entre intentos.
 3. **Tipos de puerto** — un shuffle de los 9 tipos.
 
-Si ese orden cambia, cambian todos los tableros de todas las semillas y el snapshot se rompe a propósito. Se actualiza de forma consciente, nunca regrabándolo a ciegas.
+**En `createGame(seed, players)`**, continuando con el mismo estado del PRNG:
+
+4. **Tablero** — los pasos 1 a 3. Va primero para que el snapshot de M1 siga valiendo.
+5. **Orden de turnos** — un shuffle de los asientos, en el orden en que se recibieron.
+6. **Mazo de desarrollo** — un shuffle de las 25 cartas. Se mezcla acá desde M2 aunque nadie robe hasta M5: meterlo después correría todas las tiradas de todas las semillas.
+
+**Durante la partida:**
+
+7. **Dados** — por cada `rollDice`, dos `rollDie`: primero d1, después d2.
+8. **Robo del ladrón** (M3) — una extracción sobre la mano de la víctima.
+
+Si ese orden cambia, cambian todos los tableros y todas las partidas de todas las semillas, y el snapshot se rompe a propósito. Se actualiza de forma consciente, nunca regrabándolo a ciegas.
