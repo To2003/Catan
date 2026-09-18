@@ -46,3 +46,63 @@ export type Result<T> = { ok: true; value: T } | { ok: false; error: ErrorCode }
 export const ok = <T>(value: T): Result<T> => ({ ok: true, value });
 
 export const err = <T>(error: ErrorCode): Result<T> => ({ ok: false, error });
+
+/** A position in unit space (hex circumradius = 1). y grows downward, as in SVG. */
+export interface Point {
+  readonly x: number;
+  readonly y: number;
+}
+
+export interface Hex {
+  readonly id: HexId;
+  readonly q: number;
+  readonly r: number;
+  readonly center: Point;
+  readonly terrain: Terrain;
+  /** Absent on the desert, which produces nothing. */
+  readonly number?: number;
+  /** The 6 corners in drawing order. */
+  readonly corners: readonly VertexId[];
+  /** The 6 sides, where side i joins corners i and i+1. */
+  readonly edges: readonly EdgeId[];
+}
+
+export interface Vertex {
+  readonly id: VertexId;
+  readonly x: number;
+  readonly y: number;
+  readonly hexes: readonly HexId[];
+  readonly edges: readonly EdgeId[];
+  readonly neighbors: readonly VertexId[];
+  /** Set on both endpoints of a port edge: this is what the trade rules read. */
+  readonly port?: PortType;
+}
+
+export interface Edge {
+  readonly id: EdgeId;
+  readonly vertices: readonly [VertexId, VertexId];
+  readonly hexes: readonly HexId[];
+}
+
+/** A harbour, kept edge-first so the renderer knows where to draw the dock. */
+export interface Port {
+  readonly edge: EdgeId;
+  readonly type: PortType;
+  readonly vertices: readonly [VertexId, VertexId];
+}
+
+/**
+ * The board as generated: topology plus terrain, numbers and ports.
+ * Immutable for the whole game. The robber lives in GameState.robberHex,
+ * not here (SPEC.md §5.2).
+ */
+export interface BoardGraph {
+  readonly hexes: Readonly<Record<HexId, Hex>>;
+  readonly vertices: Readonly<Record<VertexId, Vertex>>;
+  readonly edges: Readonly<Record<EdgeId, Edge>>;
+  readonly ports: readonly Port[];
+  /** Ids in canonical order, so callers can iterate deterministically. */
+  readonly hexIds: readonly HexId[];
+  readonly vertexIds: readonly VertexId[];
+  readonly edgeIds: readonly EdgeId[];
+}
