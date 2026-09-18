@@ -27,6 +27,10 @@ export const writeSeedToUrl = (seed: number): void => {
   window.history.replaceState(null, '', url);
 };
 
+/** Whether to open the hot-seat debug tool, from `?debug=1` (SPEC.md §6, M2). */
+export const readHotSeatFromUrl = (): boolean =>
+  new URLSearchParams(window.location.search).get('debug') === '1';
+
 /** Whether the debug id overlay should start on, from `?ids=1`. Handy for sharing a link. */
 export const readDebugFromUrl = (): boolean =>
   new URLSearchParams(window.location.search).get('ids') === '1';
