@@ -1,5 +1,15 @@
-import type { GameEvent, PlayerId } from '@tierra-austral/engine';
+import {
+  RESOURCES,
+  type GameEvent,
+  type PlayerId,
+  type ResourceBundle,
+} from '@tierra-austral/engine';
 import { RESOURCE_LABELS } from './terrainStyles.js';
+
+const describeBundle = (bundle: Readonly<ResourceBundle>): string =>
+  RESOURCES.filter((resource) => bundle[resource] > 0)
+    .map((resource) => `${bundle[resource]} ${RESOURCE_LABELS[resource]}`)
+    .join(', ');
 
 /**
  * Engine events as a line of text for the debug log. Rough on purpose: this is
@@ -37,6 +47,22 @@ export const eventText = (event: GameEvent, nameOf: (id: PlayerId) => string): s
       return `${nameOf(event.player)} mejora a ciudad en ${event.vertex}`;
     case 'ResourcesPaid':
       return `${nameOf(event.player)} paga al banco`;
+    case 'DiscardRequired':
+      return `Sale un 7: descartan ${Object.entries(event.pending)
+        .map(([id, count]) => `${nameOf(id)} (${count})`)
+        .join(', ')}`;
+    case 'CardsDiscarded':
+      return `${nameOf(event.player)} descarta ${event.count} cartas`;
+    case 'DiscardDetail':
+      return `  ${nameOf(event.player)} descarta ${describeBundle(event.cards)}`;
+    case 'RobberMoved':
+      return `${nameOf(event.player)} mueve el ladrón de ${event.from} a ${event.to}`;
+    case 'StealSkipped':
+      return 'No hay a quién robarle';
+    case 'StealResolved':
+      return `${nameOf(event.thief)} le roba una carta a ${nameOf(event.victim)}`;
+    case 'ResourceStolen':
+      return `  La carta robada es ${RESOURCE_LABELS[event.resource]}`;
     case 'PhaseChanged':
       return `Fase: ${event.phase.kind}`;
     case 'TurnEnded':

@@ -55,6 +55,10 @@ export type ErrorCode =
   | 'INVALID_TARGET'
   /** The game is already decided; no further actions apply. */
   | 'GAME_OVER'
+  /** A resource count that is not a non-negative integer: NaN, a decimal, a negative. */
+  | 'INVALID_AMOUNT'
+  /** A discard that does not add up to exactly what the player owes. */
+  | 'INVALID_DISCARD'
   /** The action exists in the union but its milestone has not landed yet. */
   | 'NOT_IMPLEMENTED';
 
@@ -182,7 +186,18 @@ export type Phase =
       readonly lastSettlement?: VertexId;
     }
   | { readonly kind: 'preRoll' }
-  | { readonly kind: 'discard'; readonly pending: Readonly<Record<PlayerId, number>> }
+  | {
+      readonly kind: 'discard';
+      /** How many cards each player still owes. Leaving the record means done. */
+      readonly pending: Readonly<Record<PlayerId, number>>;
+      /**
+       * Carried through to the moveRobber phase that follows. Only a seven ever
+       * reaches a discard — a knight goes straight to moveRobber — but the
+       * fields travel explicitly rather than being inferred back (SPEC.md §12.3).
+       */
+      readonly source: 'seven';
+      readonly returnTo: 'main';
+    }
   | {
       readonly kind: 'moveRobber';
       readonly source: 'seven' | 'knight';

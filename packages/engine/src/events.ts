@@ -18,6 +18,13 @@ import type {
  * filtered per player before being emitted.
  *
  * Events are plain data: serializable, with no references into the board.
+ *
+ * Some carry `visibleTo`: the only players who may see them. Absent means
+ * public. The audience is a *field*, not a matter of which type the event is,
+ * so in M6 the server filters on one field and never has to know the types. The
+ * pattern is a public event stating what happened plus a private one carrying
+ * the detail, so filtering means dropping an event whole rather than rewriting
+ * its payload.
  */
 
 /** One player receiving one resource from one hex. */
@@ -63,9 +70,44 @@ export type GameEvent =
       readonly cost: Readonly<ResourceBundle>;
     }
 
+  /* A seven (SPEC.md §4.8) */
+  | {
+      readonly type: 'DiscardRequired';
+      readonly pending: Readonly<Record<PlayerId, number>>;
+    }
+  | { readonly type: 'CardsDiscarded'; readonly player: PlayerId; readonly count: number }
+  | {
+      readonly type: 'DiscardDetail';
+      readonly player: PlayerId;
+      readonly cards: Readonly<ResourceBundle>;
+      readonly visibleTo: readonly PlayerId[];
+    }
+  | {
+      readonly type: 'RobberMoved';
+      readonly player: PlayerId;
+      readonly from: HexId;
+      readonly to: HexId;
+    }
+  | { readonly type: 'StealSkipped'; readonly reason: 'noCandidates' }
+  | { readonly type: 'StealResolved'; readonly thief: PlayerId; readonly victim: PlayerId }
+  | {
+      readonly type: 'ResourceStolen';
+      readonly thief: PlayerId;
+      readonly victim: PlayerId;
+      readonly resource: Resource;
+      readonly visibleTo: readonly PlayerId[];
+    }
+
   /* Turn flow */
   | { readonly type: 'PhaseChanged'; readonly phase: Phase }
   | { readonly type: 'TurnEnded'; readonly player: PlayerId; readonly next: PlayerId }
   | { readonly type: 'GameWon'; readonly player: PlayerId; readonly points: number };
 
 export type GameEventType = GameEvent['type'];
+
+/**
+ * Whether a player may see an event. Public events have no audience; private
+ * ones list theirs. This is the whole filter the server needs (M6).
+ */
+export const isVisibleTo = (event: GameEvent, playerId: PlayerId): boolean =>
+  !('visibleTo' in event) || event.visibleTo.includes(playerId);
