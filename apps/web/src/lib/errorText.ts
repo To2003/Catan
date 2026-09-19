@@ -22,5 +22,12 @@ export const ERROR_TEXT: Record<ErrorCode, string> = {
   CARD_BOUGHT_THIS_TURN: 'La compraste este turno',
   ALREADY_PLAYED_DEV_CARD: 'Ya jugaste una carta este turno',
   NO_LEGAL_PLACEMENT: 'No hay dónde construir',
-  NOT_IMPLEMENTED: 'Todavía no está implementado',
+  INVALID_OFFER: 'La oferta no sirve: cada lado necesita al menos 1 carta distinta',
+  TOO_MANY_OFFERS: 'Ya tenés 3 ofertas abiertas',
+  OFFER_NOT_FOUND: 'Esa oferta ya no está',
+  NOT_OFFER_TARGET: 'Esa oferta no es para vos',
+  NOT_OFFER_OWNER: 'Esa oferta no es tuya',
+  ALREADY_RESPONDED: 'Ya respondiste esa oferta',
+  NOT_ACCEPTED: 'Ese jugador no aceptó',
+  COUNTER_NOT_ALLOWED: 'No se puede contraofertar una contraoferta',
 };

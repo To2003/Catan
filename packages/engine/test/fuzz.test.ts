@@ -103,17 +103,16 @@ const WEIGHTS: Record<Action['type'], number> = {
   moveRobber: 6,
   steal: 6,
   endTurn: 1,
+  createOffer: 5,
+  respondOffer: 8,
+  counterOffer: 4,
+  confirmTrade: 10,
+  cancelOffer: 1,
   buyDevCard: 6,
   playKnight: 6,
   playRoadBuilding: 6,
   playYearOfPlenty: 6,
   playMonopoly: 6,
-  // Not reachable yet (M7); listed so a new action cannot be forgotten here.
-  createOffer: 0,
-  respondOffer: 0,
-  counterOffer: 0,
-  confirmTrade: 0,
-  cancelOffer: 0,
 };
 
 /** Picks a move with the weights above. Falls back to uniform if every weight is 0. */
@@ -159,6 +158,29 @@ const randomDiscard = (
   return { cards, rng: draw.state };
 };
 
+/** A bundle of one resource the player actually holds, for building offers. */
+const someHeld = (
+  state: ReadonlyGameState,
+  playerId: PlayerId,
+  rng: RngState,
+): { bundle: Partial<ResourceBundle>; rng: RngState } | undefined => {
+  const player = state.players.find((candidate) => candidate.id === playerId);
+  const held = RESOURCES.filter((resource) => (player?.resources[resource] ?? 0) > 0);
+  if (held.length === 0) return undefined;
+  const draw = nextInt(rng, held.length);
+  return { bundle: { [at(held, draw.value)]: 1 }, rng: draw.state };
+};
+
+/** A resource the player is not offering, to ask for in return. */
+const someOther = (
+  give: Partial<ResourceBundle>,
+  rng: RngState,
+): { bundle: Partial<ResourceBundle>; rng: RngState } => {
+  const others = RESOURCES.filter((resource) => (give[resource] ?? 0) === 0);
+  const draw = nextInt(rng, others.length);
+  return { bundle: { [at(others, draw.value)]: 1 }, rng: draw.state };
+};
+
 /** Every move available to anyone right now, not just to the active player. */
 const legalMoves = (state: ReadonlyGameState, rng: RngState): { moves: Move[]; rng: RngState } => {
   const phase = state.phase;
@@ -177,6 +199,10 @@ const legalMoves = (state: ReadonlyGameState, rng: RngState): { moves: Move[]; r
 
   const playerId = state.currentPlayer;
   const player = state.players.find((candidate) => candidate.id === playerId);
+
+  // Trading needs moves from players who are not on turn, so it is built
+  // separately and merged in at the end.
+  const tradeMoves: Move[] = [];
 
   // Year of plenty and monopoly take a choice, so the fuzzer makes one with its
   // own RNG rather than enumerating every combination.
@@ -221,9 +247,65 @@ const legalMoves = (state: ReadonlyGameState, rng: RngState): { moves: Move[]; r
   if (phase.kind === 'preRoll') actions.push({ type: 'rollDice' });
   if (phase.kind === 'main') actions.push({ type: 'endTurn' });
 
+  if (phase.kind === 'main') {
+    // The active player opens an offer with a card they hold.
+    const give = someHeld(state, playerId, current);
+    if (give) {
+      current = give.rng;
+      const want = someOther(give.bundle, current);
+      current = want.rng;
+      actions.push({
+        type: 'createOffer',
+        give: give.bundle,
+        want: want.bundle,
+        to: 'all',
+      });
+    }
+
+    for (const offer of state.tradeOffers) {
+      // Whoever made it may withdraw it, and whoever holds it may close it.
+      tradeMoves.push({ playerId: offer.from, action: { type: 'cancelOffer', offerId: offer.id } });
+      for (const other of state.players) {
+        tradeMoves.push({
+          playerId: other.id,
+          action: { type: 'respondOffer', offerId: offer.id, response: 'accept' },
+        });
+        tradeMoves.push({
+          playerId: other.id,
+          action: { type: 'respondOffer', offerId: offer.id, response: 'reject' },
+        });
+        tradeMoves.push({
+          playerId: playerId,
+          action: { type: 'confirmTrade', offerId: offer.id, withPlayer: other.id },
+        });
+
+        const counterGive = someHeld(state, other.id, current);
+        if (counterGive) {
+          current = counterGive.rng;
+          const counterWant = someOther(counterGive.bundle, current);
+          current = counterWant.rng;
+          tradeMoves.push({
+            playerId: other.id,
+            action: {
+              type: 'counterOffer',
+              offerId: offer.id,
+              give: counterGive.bundle,
+              want: counterWant.bundle,
+            },
+          });
+        }
+      }
+    }
+  }
+
   // Everything above is a candidate; validate has the final say.
-  const legal = actions.filter((action) => isLegalAction(state, playerId, action));
-  return { moves: legal.map((action) => ({ playerId, action })), rng: current };
+  const legal: Move[] = [
+    ...actions
+      .filter((action) => isLegalAction(state, playerId, action))
+      .map((action) => ({ playerId, action })),
+    ...tradeMoves.filter((move) => isLegalAction(state, move.playerId, move.action)),
+  ];
+  return { moves: legal, rng: current };
 };
 
 const checkInvariants = (state: ReadonlyGameState, context: string): void => {
@@ -386,6 +468,12 @@ const checkMoveEffect = (
     );
     expect(after.bank[given], `${context} — bank took the cards`).toBe(before.bank[given] + rate);
     expect(after.bank[want], `${context} — bank paid one card`).toBe(before.bank[want] - 1);
+  }
+
+  if (move.action.type === 'confirmTrade') {
+    // A trade between players moves cards sideways: the bank is untouched and
+    // nothing is created.
+    expect(after.bank, `${context} — a player trade does not touch the bank`).toEqual(before.bank);
   }
 
   if (move.action.type === 'steal') {

@@ -14,6 +14,7 @@ import { Board } from '../components/board/Board.js';
 import { DevCardPanel } from '../components/DevCardPanel.js';
 import { DiscardModal } from '../components/DiscardModal.js';
 import { ResourceChoiceModal } from '../components/ResourceChoiceModal.js';
+import { OfferPanel } from '../components/OfferPanel.js';
 import { TradePanel } from '../components/TradePanel.js';
 import { eventText } from '../lib/eventText.js';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
@@ -322,6 +323,30 @@ export function GameScreen() {
               send({ type: 'buyDevCard' });
             }}
             onPlay={onPlayCard}
+          />
+
+          <OfferPanel
+            you={view.you}
+            hand={view.me.resources}
+            offers={view.tradeOffers}
+            moves={view.legalMoves}
+            nameOf={nameOf}
+            players={view.players.map((player) => ({ id: player.id, name: player.name }))}
+            onCreate={(give, want, to) => {
+              send({ type: 'createOffer', give, want, to });
+            }}
+            onRespond={(offerId, response) => {
+              send({ type: 'respondOffer', offerId, response });
+            }}
+            onCounter={(offerId, give, want) => {
+              send({ type: 'counterOffer', offerId, give, want });
+            }}
+            onConfirm={(offerId, withPlayer) => {
+              send({ type: 'confirmTrade', offerId, withPlayer });
+            }}
+            onCancel={(offerId) => {
+              send({ type: 'cancelOffer', offerId });
+            }}
           />
 
           <TradePanel

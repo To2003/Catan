@@ -15,3 +15,4 @@ export * from './rules/largestArmy.js';
 export * from './rules/longestRoad.js';
 export * from './view.js';
 export * from './presence.js';
+export * from './rules/playerTrade.js';

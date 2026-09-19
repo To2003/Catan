@@ -69,8 +69,21 @@ export type ErrorCode =
   | 'ALREADY_PLAYED_DEV_CARD'
   /** Road building with nowhere legal to build (SPEC.md §12.8). */
   | 'NO_LEGAL_PLACEMENT'
-  /** The action exists in the union but its milestone has not landed yet. */
-  | 'NOT_IMPLEMENTED';
+  /** An offer with an empty side, or the same resource on both (SPEC.md §12.5). */
+  | 'INVALID_OFFER'
+  /** More than three open offers of your own (SPEC.md §12.6). */
+  | 'TOO_MANY_OFFERS'
+  | 'OFFER_NOT_FOUND'
+  /** Answering an offer you were not sent. */
+  | 'NOT_OFFER_TARGET'
+  /** Acting on an offer that is not yours. */
+  | 'NOT_OFFER_OWNER'
+  /** Already answered this offer. */
+  | 'ALREADY_RESPONDED'
+  /** Confirming with somebody who has not accepted. */
+  | 'NOT_ACCEPTED'
+  /** Countering a counteroffer: negotiation is one level deep (SPEC.md §12.6). */
+  | 'COUNTER_NOT_ALLOWED';
 
 /**
  * Recursively readonly. The engine hands state out as `DeepReadonly<GameState>`

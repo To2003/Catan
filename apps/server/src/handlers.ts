@@ -71,11 +71,18 @@ const MESSAGES: Record<TransportError, string> = {
  *
  * During a discard everyone who owes cards plays at the same time: the first to
  * arrive bumps the version, and the rest would get STALE_STATE for a move that
- * is perfectly valid. The engine validates every action against the state as it
- * is when it runs, so the version is only worth checking for the active
- * player's own sequential moves. M7 adds respondOffer and counterOffer here.
+ * is perfectly valid. Answering a trade is the same shape — three players may
+ * accept at once — and so is withdrawing an offer while somebody else plays.
+ * The engine validates every action against the state as it is when it runs, so
+ * the version is only worth checking for the active player's own sequential
+ * moves.
  */
-const CONCURRENT_ACTIONS = new Set<Action['type']>(['discard']);
+const CONCURRENT_ACTIONS = new Set<Action['type']>([
+  'discard',
+  'respondOffer',
+  'counterOffer',
+  'cancelOffer',
+]);
 
 export type { GameServer } from './broadcast.js';
 

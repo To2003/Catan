@@ -68,12 +68,10 @@ describe('validateAction: turn and phase gates', () => {
     expect(validateAction(over, over.currentPlayer, { type: 'endTurn' })).toBe('GAME_OVER');
   });
 
-  it('reports actions whose milestone has not landed as NOT_IMPLEMENTED', () => {
+  it('rejects an action about an offer that does not exist', () => {
     const state = mainState();
-    // The five player-to-player trade actions are M7; trade.test.ts pins the
-    // list exactly.
     expect(validateAction(state, ANA.id, { type: 'cancelOffer', offerId: 'x' })).toBe(
-      'NOT_IMPLEMENTED',
+      'OFFER_NOT_FOUND',
     );
   });
 });

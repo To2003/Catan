@@ -11,6 +11,13 @@ import {
   playRoadBuilding,
   playYearOfPlenty,
 } from './rules/devCards.js';
+import {
+  cancelOffer,
+  confirmTrade,
+  counterOffer,
+  createOffer,
+  respondOffer,
+} from './rules/playerTrade.js';
 import { maritimeTrade } from './rules/trade.js';
 import { endTurn } from './rules/turn.js';
 import { checkVictory } from './rules/victory.js';
@@ -117,12 +124,29 @@ export const applyAction = (
       maritimeTrade(draft, playerId, action.give, action.want, events);
       break;
 
+    case 'createOffer':
+      createOffer(draft, playerId, action.give, action.want, action.to, events);
+      break;
+
+    case 'respondOffer':
+      respondOffer(draft, playerId, action.offerId, action.response, events);
+      break;
+
+    case 'counterOffer':
+      counterOffer(draft, playerId, action.offerId, action.give, action.want, events);
+      break;
+
+    case 'confirmTrade':
+      confirmTrade(draft, playerId, action.offerId, action.withPlayer, events);
+      break;
+
+    case 'cancelOffer':
+      cancelOffer(draft, action.offerId, events);
+      break;
+
     case 'endTurn':
       endTurn(draft, playerId, events);
       break;
-
-    default:
-      return { ok: false, error: 'NOT_IMPLEMENTED' };
   }
 
   // A road or a settlement can change who has the longest road — a settlement

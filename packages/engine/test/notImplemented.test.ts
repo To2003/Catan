@@ -3,24 +3,15 @@ import { validateAction, type Action, type ActionType } from '../src/index.js';
 import { ANA, draft, runSetup } from './helpers.js';
 
 /**
- * What is still missing, pinned exactly.
+ * Every action has a handler, and this is what keeps it that way.
  *
- * `NOT_IMPLEMENTED` exists so an action in the union without a handler says so
- * instead of failing in some plausible-looking way. The list below is the whole
- * of what M6 and M7 still owe, and this test fails in both directions: if an
- * M5 action quietly stopped being implemented, and if a new action is added
- * without a handler.
- *
- * When player-to-player trade lands in M7 this list goes empty, and then the
- * code itself comes out of ErrorCode.
+ * Through M5 the engine carried a `NOT_IMPLEMENTED` code so an action in the
+ * union without a handler said so instead of failing in some plausible-looking
+ * way. M7 emptied the list and the code is gone; what remains is the guard: a
+ * sample of every action in the union, each of which must produce a real
+ * verdict — legal, or illegal for a reason that is about the rules.
  */
-const STILL_TO_COME: readonly ActionType[] = [
-  'createOffer',
-  'respondOffer',
-  'counterOffer',
-  'confirmTrade',
-  'cancelOffer',
-];
+const STILL_TO_COME: readonly ActionType[] = [];
 
 /** One sample of every action in the union (SPEC.md §5.3). */
 const SAMPLES: readonly Action[] = [
@@ -58,20 +49,18 @@ describe('which actions still have no handler', () => {
     for (const type of STILL_TO_COME) expect(covered.has(type)).toBe(true);
   });
 
-  it('is exactly the five player-to-player trade actions of M7', () => {
-    const unimplemented = SAMPLES.filter(
-      (action) => validateAction(state, ANA.id, action) === 'NOT_IMPLEMENTED',
-    ).map((action) => action.type);
-
-    expect([...unimplemented].sort()).toEqual([...STILL_TO_COME].sort());
+  it('leaves nothing unimplemented', () => {
+    expect(STILL_TO_COME).toEqual([]);
   });
 
-  it('never reports NOT_IMPLEMENTED for anything M5 delivered', () => {
+  it('gives every action a verdict about the rules', () => {
     for (const action of SAMPLES) {
-      if (STILL_TO_COME.includes(action.type)) continue;
-      // They may well be illegal in this state — what they may not be is
-      // unimplemented.
-      expect(validateAction(state, ANA.id, action)).not.toBe('NOT_IMPLEMENTED');
+      const verdict = validateAction(state, ANA.id, action);
+      // Either legal, or rejected for a reason — never for not existing. The
+      // code that used to say that is gone, so this now guards the absence.
+      if (verdict !== null) {
+        expect(verdict, `${action.type} was rejected with an empty code`).toBeTruthy();
+      }
     }
   });
 });

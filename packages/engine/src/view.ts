@@ -11,6 +11,7 @@ import type {
   PlayerId,
   ReadonlyGameState,
   ResourceBundle,
+  TradeOffer,
   VertexId,
 } from './types.js';
 
@@ -68,6 +69,8 @@ export interface PlayerView {
   readonly currentPlayer: PlayerId;
   readonly turnOrder: readonly PlayerId[];
   readonly lastRoll?: readonly [number, number];
+  /** Offers are public: at a table everybody hears them (SPEC.md §4.9). */
+  readonly tradeOffers: readonly TradeOffer[];
   readonly largestArmy?: PlayerId;
   readonly longestRoad?: { readonly owner: PlayerId; readonly length: number };
   /** Everything this player could do right now, worked out by the engine. */
@@ -117,6 +120,7 @@ export const getPlayerView = (state: ReadonlyGameState, playerId: PlayerId): Pla
     bank: { ...state.bank },
     devDeckCount: state.devDeck.length,
     devCardPlayedThisTurn: state.devCardPlayedThisTurn,
+    tradeOffers: state.tradeOffers,
     phase: state.phase,
     currentPlayer: state.currentPlayer,
     turnOrder: [...state.turnOrder],

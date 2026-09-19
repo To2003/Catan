@@ -1,6 +1,6 @@
 import { DEV_CARDS, RESOURCES } from './constants.js';
 import { availableMaritimeRates } from './rules/trade.js';
-import { isLegalAction, validateAction } from './validate.js';
+import { canCounterOffer, canOpenOffer, isLegalAction, validateAction } from './validate.js';
 import type {
   Action,
   DevCard,
@@ -79,6 +79,16 @@ export const legalMaritimeTrades = (
     ).map((want) => ({ give, want })),
   );
 
+/** What a player may do with one open offer. */
+export interface OfferOptions {
+  readonly canAccept: boolean;
+  readonly canReject: boolean;
+  readonly canCounter: boolean;
+  readonly canCancel: boolean;
+  /** Who this player could close the deal with right now. */
+  readonly confirmWith: readonly PlayerId[];
+}
+
 /** Why a development card cannot be played, straight from the rules. */
 export interface DevCardOption {
   readonly playable: boolean;
@@ -109,6 +119,9 @@ export interface LegalMoves {
    */
   readonly devCardOptions: Readonly<Record<DevCard, DevCardOption>>;
   readonly canBuyDevCard: boolean;
+  readonly canCreateOffer: boolean;
+  /** What this player may do with each open offer, keyed by offer id. */
+  readonly offers: Readonly<Record<string, OfferOptions>>;
   readonly canRoll: boolean;
   readonly canEndTurn: boolean;
   /** How many cards this player owes right now, if any (SPEC.md §4.8). */
@@ -143,6 +156,43 @@ const devCardOptions = (
   return options;
 };
 
+const offerOptions = (
+  state: ReadonlyGameState,
+  playerId: PlayerId,
+): Record<string, OfferOptions> => {
+  const options: Record<string, OfferOptions> = {};
+
+  for (const offer of state.tradeOffers) {
+    options[offer.id] = {
+      canAccept: isLegalAction(state, playerId, {
+        type: 'respondOffer',
+        offerId: offer.id,
+        response: 'accept',
+      }),
+      canReject: isLegalAction(state, playerId, {
+        type: 'respondOffer',
+        offerId: offer.id,
+        response: 'reject',
+      }),
+      // Asked without cards, since the player has not chosen any yet: what is
+      // being answered is "may I counter this at all?".
+      canCounter: canCounterOffer(state, playerId, offer.id) === null,
+      canCancel: isLegalAction(state, playerId, { type: 'cancelOffer', offerId: offer.id }),
+      confirmWith: state.players
+        .map((player) => player.id)
+        .filter((withPlayer) =>
+          isLegalAction(state, playerId, {
+            type: 'confirmTrade',
+            offerId: offer.id,
+            withPlayer,
+          }),
+        ),
+    };
+  }
+
+  return options;
+};
+
 export const legalMoves = (state: ReadonlyGameState, playerId: PlayerId): LegalMoves => {
   const owed = state.phase.kind === 'discard' ? state.phase.pending[playerId] : undefined;
 
@@ -156,6 +206,8 @@ export const legalMoves = (state: ReadonlyGameState, playerId: PlayerId): LegalM
     maritimeRates: availableMaritimeRates(state, playerId),
     devCardOptions: devCardOptions(state, playerId),
     canBuyDevCard: isLegalAction(state, playerId, { type: 'buyDevCard' }),
+    canCreateOffer: canOpenOffer(state, playerId) === null,
+    offers: offerOptions(state, playerId),
     canRoll: canRollDice(state, playerId),
     canEndTurn: canEndTurn(state, playerId),
     ...(owed === undefined ? {} : { discardOwed: owed }),

@@ -71,6 +71,37 @@ export const actionSchema = z.discriminatedUnion('type', [
     .strict(),
   z.object({ type: z.literal('playMonopoly'), resource }).strict(),
   z.object({ type: z.literal('maritimeTrade'), give: resource, want: resource }).strict(),
+  z
+    .object({
+      type: z.literal('createOffer'),
+      give: bundle,
+      want: bundle,
+      to: z.union([z.literal('all'), z.array(playerId).min(1).max(3)]),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('respondOffer'),
+      offerId: z.string().min(1).max(32),
+      response: z.enum(['accept', 'reject']),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('counterOffer'),
+      offerId: z.string().min(1).max(32),
+      give: bundle,
+      want: bundle,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('confirmTrade'),
+      offerId: z.string().min(1).max(32),
+      withPlayer: playerId,
+    })
+    .strict(),
+  z.object({ type: z.literal('cancelOffer'), offerId: z.string().min(1).max(32) }).strict(),
   z.object({ type: z.literal('endTurn') }).strict(),
 ]);
 

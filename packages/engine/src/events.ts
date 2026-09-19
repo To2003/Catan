@@ -6,6 +6,7 @@ import type {
   PlayerId,
   Resource,
   ResourceBundle,
+  TradeOffer,
   VertexId,
 } from './types.js';
 
@@ -143,6 +144,30 @@ export type GameEvent =
       readonly length: number;
     }
   | { readonly type: 'LargestArmyChanged'; readonly owner: PlayerId; readonly knights: number }
+
+  /* Trading between players (SPEC.md §4.9). Offers are public: at a table
+     everybody hears them. */
+  | { readonly type: 'OfferCreated'; readonly offer: TradeOffer }
+  | {
+      readonly type: 'OfferResponded';
+      readonly offerId: string;
+      readonly player: PlayerId;
+      readonly response: 'accept' | 'reject';
+    }
+  | {
+      readonly type: 'CounterOffered';
+      readonly offer: TradeOffer;
+      readonly parentOfferId: string;
+    }
+  | { readonly type: 'OfferCancelled'; readonly offerId: string }
+  | {
+      readonly type: 'TradeConfirmed';
+      readonly offerId: string;
+      readonly from: PlayerId;
+      readonly with: PlayerId;
+      readonly give: Partial<ResourceBundle>;
+      readonly want: Partial<ResourceBundle>;
+    }
 
   /* Turn flow */
   | { readonly type: 'PhaseChanged'; readonly phase: Phase }

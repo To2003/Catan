@@ -1,5 +1,6 @@
 import type { GameEvent } from '../events.js';
 import type { GameState, PlayerId } from '../types.js';
+import { clearOffers } from './playerTrade.js';
 import { checkVictory } from './victory.js';
 
 /** Ending a turn and handing over (SPEC.md §4.6). */
@@ -17,7 +18,7 @@ export const endTurn = (draft: GameState, playerId: PlayerId, events: GameEvent[
   for (const player of draft.players) player.devCardsBoughtThisTurn = [];
 
   // Open offers die with the turn (SPEC.md §4.9).
-  draft.tradeOffers = [];
+  clearOffers(draft, events);
 
   draft.currentPlayer = next;
   draft.phase = { kind: 'preRoll' };

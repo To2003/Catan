@@ -15,9 +15,9 @@ export const DEV_CARD_LABELS: Record<DevCard, string> = {
   monopoly: 'Monopolio',
 };
 
-const describeBundle = (bundle: Readonly<ResourceBundle>): string =>
-  RESOURCES.filter((resource) => bundle[resource] > 0)
-    .map((resource) => `${bundle[resource]} ${RESOURCE_LABELS[resource]}`)
+const describeBundle = (bundle: Partial<Readonly<ResourceBundle>>): string =>
+  RESOURCES.filter((resource) => (bundle[resource] ?? 0) > 0)
+    .map((resource) => `${bundle[resource] ?? 0} ${RESOURCE_LABELS[resource]}`)
     .join(', ');
 
 /**
@@ -100,6 +100,16 @@ export const eventText = (event: GameEvent, nameOf: (id: PlayerId) => string): s
         : `${nameOf(event.owner)} se lleva el camino más largo (${event.length})`;
     case 'LargestArmyChanged':
       return `${nameOf(event.owner)} se lleva el gran ejército (${event.knights} caballeros)`;
+    case 'OfferCreated':
+      return `${nameOf(event.offer.from)} ofrece ${describeBundle(event.offer.give)} por ${describeBundle(event.offer.want)}`;
+    case 'OfferResponded':
+      return `${nameOf(event.player)} ${event.response === 'accept' ? 'acepta' : 'rechaza'} la oferta`;
+    case 'CounterOffered':
+      return `${nameOf(event.offer.from)} contraoferta: ${describeBundle(event.offer.give)} por ${describeBundle(event.offer.want)}`;
+    case 'OfferCancelled':
+      return 'Se cancela una oferta';
+    case 'TradeConfirmed':
+      return `${nameOf(event.from)} y ${nameOf(event.with)} cierran: ${describeBundle(event.give)} por ${describeBundle(event.want)}`;
     case 'PhaseChanged':
       return `Fase: ${event.phase.kind}`;
     case 'TurnEnded':

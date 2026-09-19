@@ -1,4 +1,11 @@
-import { COSTS, RESOURCES, emptyBundle } from './constants.js';
+import { COSTS, MAX_OPEN_OFFERS, RESOURCES, emptyBundle } from './constants.js';
+import {
+  holds,
+  isCounterOffer,
+  offerById,
+  openOffersOf,
+  sidesAreValid,
+} from './rules/playerTrade.js';
 import { hasLegalFreeRoad, playableCount } from './rules/devCards.js';
 import { canTradeMaritime } from './rules/trade.js';
 import {
@@ -29,15 +36,6 @@ import type {
  * candidates through it rather than restating any rule. Returns `null` when the
  * action is legal, or the code to reject it with.
  */
-
-/** Actions whose milestone has not landed yet. They exist in the union already (SPEC.md §5.3). */
-const NOT_YET_IMPLEMENTED = new Set([
-  'createOffer',
-  'respondOffer',
-  'counterOffer',
-  'confirmTrade',
-  'cancelOffer',
-]);
 
 const validateSettlement = (
   state: ReadonlyGameState,
@@ -195,6 +193,150 @@ const validateSteal = (state: ReadonlyGameState, target: PlayerId): ErrorCode | 
   return phase.candidates.includes(target) ? null : 'INVALID_TARGET';
 };
 
+/** The checks every offer shares, whether it opens a negotiation or answers one. */
+const validateSides = (
+  player: { resources: Readonly<ResourceBundle> },
+  give: Partial<ResourceBundle>,
+  want: Partial<ResourceBundle>,
+): ErrorCode | null => {
+  if (!validAmounts(give) || !validAmounts(want)) return 'INVALID_AMOUNT';
+  if (!sidesAreValid(give, want)) return 'INVALID_OFFER';
+  // You cannot offer what you do not have. It is checked again on confirm,
+  // because a hand can change while an offer sits on the table.
+  if (!holds(player.resources, give)) return 'INSUFFICIENT_RESOURCES';
+  return null;
+};
+
+/**
+ * Whether this player could open an offer at all, leaving aside what is in it.
+ *
+ * Split out because `legal.ts` has to answer "may I open an offer?" before the
+ * player has chosen any cards, and a probe with made-up cards would answer a
+ * different question.
+ */
+export const canOpenOffer = (state: ReadonlyGameState, playerId: PlayerId): ErrorCode | null => {
+  if (state.phase.kind === 'gameOver') return 'GAME_OVER';
+  if (state.phase.kind !== 'main') return 'WRONG_PHASE';
+  if (state.currentPlayer !== playerId) return 'NOT_YOUR_TURN';
+  if (!playerOf(state, playerId)) return 'INVALID_TARGET';
+  if (openOffersOf(state, playerId).length >= MAX_OPEN_OFFERS) return 'TOO_MANY_OFFERS';
+  return null;
+};
+
+/** The same, for countering one particular offer. */
+export const canCounterOffer = (
+  state: ReadonlyGameState,
+  playerId: PlayerId,
+  offerId: string,
+): ErrorCode | null => {
+  if (state.phase.kind === 'gameOver') return 'GAME_OVER';
+  if (state.phase.kind !== 'main') return 'WRONG_PHASE';
+
+  const offer = offerById(state, offerId);
+  if (!offer) return 'OFFER_NOT_FOUND';
+  if (isCounterOffer(offer)) return 'COUNTER_NOT_ALLOWED';
+  if (offer.from === playerId) return 'NOT_OFFER_TARGET';
+  if (!offer.to.includes(playerId)) return 'NOT_OFFER_TARGET';
+  if (!playerOf(state, playerId)) return 'INVALID_TARGET';
+  return null;
+};
+
+const validateCreateOffer = (
+  state: ReadonlyGameState,
+  playerId: PlayerId,
+  action: Extract<Action, { type: 'createOffer' }>,
+): ErrorCode | null => {
+  const eligible = canOpenOffer(state, playerId);
+  if (eligible !== null) return eligible;
+
+  const player = playerOf(state, playerId);
+  if (!player) return 'INVALID_TARGET';
+
+  if (action.to !== 'all') {
+    if (action.to.length === 0) return 'INVALID_TARGET';
+    const unique = new Set(action.to);
+    if (unique.size !== action.to.length) return 'INVALID_TARGET';
+    for (const target of action.to) {
+      if (target === playerId || !playerOf(state, target)) return 'INVALID_TARGET';
+    }
+  }
+
+  return validateSides(player, action.give, action.want);
+};
+
+const validateRespondOffer = (
+  state: ReadonlyGameState,
+  playerId: PlayerId,
+  action: Extract<Action, { type: 'respondOffer' }>,
+): ErrorCode | null => {
+  if (state.phase.kind !== 'main') return 'WRONG_PHASE';
+
+  const offer = offerById(state, action.offerId);
+  if (!offer) return 'OFFER_NOT_FOUND';
+  if (offer.from === playerId) return 'NOT_OFFER_TARGET';
+  if (!offer.to.includes(playerId)) return 'NOT_OFFER_TARGET';
+  // One answer each: to change your mind, the offer has to come round again.
+  if ((offer.responses[playerId] ?? 'pending') !== 'pending') return 'ALREADY_RESPONDED';
+  return null;
+};
+
+const validateCounterOffer = (
+  state: ReadonlyGameState,
+  playerId: PlayerId,
+  action: Extract<Action, { type: 'counterOffer' }>,
+): ErrorCode | null => {
+  const eligible = canCounterOffer(state, playerId, action.offerId);
+  if (eligible !== null) return eligible;
+
+  const player = playerOf(state, playerId);
+  if (!player) return 'INVALID_TARGET';
+  return validateSides(player, action.give, action.want);
+};
+
+const validateConfirmTrade = (
+  state: ReadonlyGameState,
+  playerId: PlayerId,
+  action: Extract<Action, { type: 'confirmTrade' }>,
+): ErrorCode | null => {
+  if (state.phase.kind !== 'main') return 'WRONG_PHASE';
+
+  const offer = offerById(state, action.offerId);
+  if (!offer) return 'OFFER_NOT_FOUND';
+
+  // Only the active player closes a deal, on their own offer or on a
+  // counteroffer sent to them (SPEC.md §12.6).
+  const mine = offer.from === playerId;
+  const toMe = offer.to.includes(playerId);
+  if (!mine && !toMe) return 'NOT_OFFER_OWNER';
+
+  const other = mine ? action.withPlayer : offer.from;
+  if (mine && action.withPlayer === playerId) return 'INVALID_TARGET';
+  if (!mine && action.withPlayer !== offer.from) return 'INVALID_TARGET';
+  if (!playerOf(state, other)) return 'INVALID_TARGET';
+
+  // A counteroffer is its own acceptance; a plain offer needs one.
+  if (mine && offer.responses[action.withPlayer] !== 'accepted') return 'NOT_ACCEPTED';
+
+  const proposer = playerOf(state, offer.from);
+  const counterparty = playerOf(state, mine ? action.withPlayer : playerId);
+  if (!proposer || !counterparty) return 'INVALID_TARGET';
+
+  // Revalidated now: hands move while an offer sits on the table.
+  if (!holds(proposer.resources, offer.give)) return 'INSUFFICIENT_RESOURCES';
+  if (!holds(counterparty.resources, offer.want)) return 'INSUFFICIENT_RESOURCES';
+  return null;
+};
+
+const validateCancelOffer = (
+  state: ReadonlyGameState,
+  playerId: PlayerId,
+  offerId: string,
+): ErrorCode | null => {
+  const offer = offerById(state, offerId);
+  if (!offer) return 'OFFER_NOT_FOUND';
+  return offer.from === playerId ? null : 'NOT_OFFER_OWNER';
+};
+
 export const validateAction = (
   state: ReadonlyGameState,
   playerId: PlayerId,
@@ -202,11 +344,17 @@ export const validateAction = (
 ): ErrorCode | null => {
   if (state.phase.kind === 'gameOver') return 'GAME_OVER';
   if (!playerOf(state, playerId)) return 'INVALID_TARGET';
-  if (NOT_YET_IMPLEMENTED.has(action.type)) return 'NOT_IMPLEMENTED';
 
   // Who may act depends on the action, not only on whose turn it is: the
   // discard is simultaneous and belongs to everyone who owes cards.
   if (action.type === 'discard') return validateDiscard(state, playerId, action.cards);
+  // Answering a trade is the other concurrent case: the players who were sent
+  // an offer act on somebody else's turn (SPEC.md §4.9).
+  if (action.type === 'respondOffer') return validateRespondOffer(state, playerId, action);
+  if (action.type === 'counterOffer') return validateCounterOffer(state, playerId, action);
+  // Cancelling is about owning the offer, not about whose turn it is: a
+  // player who countered may withdraw it while somebody else plays.
+  if (action.type === 'cancelOffer') return validateCancelOffer(state, playerId, action.offerId);
   if (state.currentPlayer !== playerId) return 'NOT_YOUR_TURN';
 
   switch (action.type) {
@@ -264,10 +412,14 @@ export const validateAction = (
       return validateMoveRobber(state, action.hex);
     case 'steal':
       return validateSteal(state, action.target);
+    case 'createOffer':
+      return validateCreateOffer(state, playerId, action);
+    // respondOffer and counterOffer were handled above: they belong to players
+    // who are not on turn.
+    case 'confirmTrade':
+      return validateConfirmTrade(state, playerId, action);
     case 'endTurn':
       return state.phase.kind === 'main' ? null : 'WRONG_PHASE';
-    default:
-      return 'NOT_IMPLEMENTED';
   }
 };
 
