@@ -1,23 +1,30 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   BANK_RESOURCE_COUNT,
+  DEV_DECK_SIZE,
+  LARGEST_ARMY_MIN_KNIGHTS,
+  LONGEST_ROAD_MIN_LENGTH,
   PIECE_STOCK,
   RESOURCES,
   applyAction,
   createGame,
   createRng,
+  isLegalAction,
   legalCitySpots,
   legalMaritimeTrades,
   legalRoadSpots,
   legalRobberHexes,
   legalSettlementSpots,
   legalStealTargets,
+  longestRoadLength,
   maritimeRate,
   nextInt,
+  playableCount,
   publicVictoryPoints,
   shuffle,
   victoryPoints,
   type Action,
+  type DevCard,
   type PlayerId,
   type ReadonlyGameState,
   type Resource,
@@ -25,6 +32,7 @@ import {
   type RngState,
 } from '../src/index.js';
 import { SEATS, at, everyRoadTouchesOwnNetwork } from './helpers.js';
+import { bruteForceLongestRoad } from './longestRoadOracle.js';
 
 /**
  * Random games, checked after every single action.
@@ -95,12 +103,12 @@ const WEIGHTS: Record<Action['type'], number> = {
   moveRobber: 6,
   steal: 6,
   endTurn: 1,
-  // Not reachable yet; listed so a new action cannot be forgotten here.
-  buyDevCard: 0,
-  playKnight: 0,
-  playRoadBuilding: 0,
-  playYearOfPlenty: 0,
-  playMonopoly: 0,
+  buyDevCard: 6,
+  playKnight: 6,
+  playRoadBuilding: 6,
+  playYearOfPlenty: 6,
+  playMonopoly: 6,
+  // Not reachable yet (M7); listed so a new action cannot be forgotten here.
   createOffer: 0,
   respondOffer: 0,
   counterOffer: 0,
@@ -168,7 +176,34 @@ const legalMoves = (state: ReadonlyGameState, rng: RngState): { moves: Move[]; r
   }
 
   const playerId = state.currentPlayer;
+  const player = state.players.find((candidate) => candidate.id === playerId);
+
+  // Year of plenty and monopoly take a choice, so the fuzzer makes one with its
+  // own RNG rather than enumerating every combination.
+  let current = rng;
+  const pickResource = (): Resource => {
+    const draw = nextInt(current, RESOURCES.length);
+    current = draw.state;
+    return at(RESOURCES, draw.value);
+  };
+
+  const cardActions: Action[] = [];
+  if (player) {
+    if (playableCount(state, playerId, 'knight') > 0) cardActions.push({ type: 'playKnight' });
+    if (playableCount(state, playerId, 'roadBuilding') > 0) {
+      cardActions.push({ type: 'playRoadBuilding' });
+    }
+    if (playableCount(state, playerId, 'monopoly') > 0) {
+      cardActions.push({ type: 'playMonopoly', resource: pickResource() });
+    }
+    if (playableCount(state, playerId, 'yearOfPlenty') > 0) {
+      cardActions.push({ type: 'playYearOfPlenty', resources: [pickResource(), pickResource()] });
+    }
+  }
+
   const actions: Action[] = [
+    { type: 'buyDevCard' },
+    ...cardActions,
     ...legalSettlementSpots(state, playerId).map((vertex): Action => ({
       type: 'placeSettlement',
       vertex,
@@ -186,7 +221,9 @@ const legalMoves = (state: ReadonlyGameState, rng: RngState): { moves: Move[]; r
   if (phase.kind === 'preRoll') actions.push({ type: 'rollDice' });
   if (phase.kind === 'main') actions.push({ type: 'endTurn' });
 
-  return { moves: actions.map((action) => ({ playerId, action })), rng };
+  // Everything above is a candidate; validate has the final say.
+  const legal = actions.filter((action) => isLegalAction(state, playerId, action));
+  return { moves: legal.map((action) => ({ playerId, action })), rng: current };
 };
 
 const checkInvariants = (state: ReadonlyGameState, context: string): void => {
@@ -251,6 +288,59 @@ const checkInvariants = (state: ReadonlyGameState, context: string): void => {
 
   // 7. The robber is always on a hex that exists.
   expect(state.board.hexes[state.robberHex], `${context} — robber hex`).toBeDefined();
+};
+
+/**
+ * The bonuses, checked against a recount rather than against the engine's own
+ * bookkeeping.
+ *
+ * Neither holder can be derived from the position alone — both are
+ * history-dependent, since a tie leaves the bonus where it was — so what is
+ * checked is everything the position *does* decide: a holder must be at the
+ * threshold and must be a maximum, and the road lengths themselves must match
+ * the brute-force oracle.
+ */
+const checkBonuses = (state: ReadonlyGameState, context: string, withOracle: boolean): void => {
+  const lengths = new Map<PlayerId, number>();
+  for (const player of state.players) {
+    const engine = longestRoadLength(state, player.id);
+    if (withOracle) {
+      expect(bruteForceLongestRoad(state, player.id), `${context} — oracle disagrees`).toBe(engine);
+    }
+    lengths.set(player.id, engine);
+  }
+
+  const longest = Math.max(...lengths.values());
+  const leaders = [...lengths.entries()].filter(([, length]) => length === longest);
+
+  const holder = state.longestRoad;
+  if (holder) {
+    expect(lengths.get(holder.owner), `${context} — recorded length`).toBe(holder.length);
+    expect(holder.length, `${context} — holder below the threshold`).toBeGreaterThanOrEqual(
+      LONGEST_ROAD_MIN_LENGTH,
+    );
+    expect(holder.length, `${context} — holder is not the longest`).toBe(longest);
+  } else {
+    // Vacant is only right below the threshold, or on a tie at the top.
+    const vacantIsRight = longest < LONGEST_ROAD_MIN_LENGTH || leaders.length > 1;
+    expect(vacantIsRight, `${context} — longest road should have an owner`).toBe(true);
+  }
+
+  const knights = new Map(state.players.map((player) => [player.id, player.knightsPlayed]));
+  const mostKnights = Math.max(...knights.values());
+  if (state.largestArmy === undefined) {
+    // Nobody can be at three knights without holding it: it is handed over the
+    // moment the third is played, and knight counts never fall.
+    expect(mostKnights, `${context} — largest army should have an owner`).toBeLessThan(
+      LARGEST_ARMY_MIN_KNIGHTS,
+    );
+  } else {
+    const held = knights.get(state.largestArmy) ?? 0;
+    expect(held, `${context} — army holder below three`).toBeGreaterThanOrEqual(
+      LARGEST_ARMY_MIN_KNIGHTS,
+    );
+    expect(held, `${context} — army holder is not the largest`).toBe(mostKnights);
+  }
 };
 
 const handOf = (state: ReadonlyGameState, playerId: PlayerId): Readonly<ResourceBundle> => {
@@ -365,6 +455,13 @@ const playRandomGame = (seed: number, fuzzState: RngState): { game: PlayedGame; 
   const actions: PlayedGame['actions'] = [];
   let stoppedBecause: PlayedGame['stoppedBecause'] = 'actionLimit';
 
+  // Development cards that have left a hand. They are not in the state — the
+  // state keeps nothing it can derive — so the run accumulates them from the
+  // events, exactly as the server will in M6.
+  const playedCards: DevCard[] = [];
+  const knightsSeen = new Map<PlayerId, number>();
+  let cardsPlayedThisTurn = 0;
+
   for (let step = 0; step < MAX_ACTIONS; step += 1) {
     if (state.phase.kind === 'gameOver') {
       stoppedBecause = 'gameOver';
@@ -389,7 +486,37 @@ const playRandomGame = (seed: number, fuzzState: RngState): { game: PlayedGame; 
     state = result.state;
     actions.push({ playerId, action });
 
+    for (const event of result.events) {
+      if (event.type === 'DevCardPlayed') {
+        playedCards.push(event.card);
+        cardsPlayedThisTurn += 1;
+        if (event.card === 'knight') {
+          knightsSeen.set(event.player, (knightsSeen.get(event.player) ?? 0) + 1);
+        }
+      }
+      if (event.type === 'TurnEnded') cardsPlayedThisTurn = 0;
+    }
+
+    // 9. One development card per turn, counted across the turn rather than
+    // trusting the flag the engine keeps.
+    expect(cardsPlayedThisTurn, `${context} — cards played this turn`).toBeLessThanOrEqual(1);
+
+    // 7. Every development card is somewhere: deck, a hand, or played.
+    const inHands = state.players.reduce((sum, player) => sum + player.devCards.length, 0);
+    expect(
+      state.devDeck.length + inHands + playedCards.length,
+      `${context} — development cards`,
+    ).toBe(DEV_DECK_SIZE);
+
+    // 8. The engine's knight count matches the knights actually played.
+    for (const player of state.players) {
+      expect(player.knightsPlayed, `${context} — knights of ${player.id}`).toBe(
+        knightsSeen.get(player.id) ?? 0,
+      );
+    }
+
     checkInvariants(state, context);
+    checkBonuses(state, context, step % PROPERTY_EVERY === 0);
     if (step % PROPERTY_EVERY === 0) checkLegalMatchesValidate(state, state.currentPlayer);
   }
 
@@ -457,9 +584,10 @@ describe('fuzzing random games', () => {
   });
 
   it('may still run out of actions, which is not an error', () => {
-    // With maritime trade most games do finish, given room: at 3000 actions
-    // 38 of 40 produce a winner. At the default 400 they mostly do not, and a
-    // run that stops at the limit is a stop, not a failure.
+    // With trade and development cards, games finish given room: at 3000
+    // actions 40 of 40 produce a winner, averaging 781 actions. At the default
+    // 400 they mostly do not, and stopping at the limit is a stop, not a
+    // failure.
     const stuck = games.filter((game) => game.stoppedBecause === 'actionLimit');
     expect(stuck.length).toBeGreaterThanOrEqual(0);
   });
