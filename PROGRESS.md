@@ -282,7 +282,7 @@ con un ganador** — en M2 no terminaba ninguna. El ladrón redistribuye pero no
 el desatascador de verdad es el comercio (M4).
 
 ```bash
-FUZZ_GAMES=200 FUZZ_MAX_ACTIONS=3000 pnpm --filter @tierra-austral/engine test fuzz
+FUZZ_GAMES=50 FUZZ_MAX_ACTIONS=3000 pnpm --filter @tierra-austral/engine test fuzz
 ```
 
 ### Cambios al SPEC en M3

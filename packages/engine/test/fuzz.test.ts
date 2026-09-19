@@ -308,9 +308,10 @@ describe('fuzzing random games', () => {
         rng = played.rng;
         games.push(played.game);
       }
-      // The default hook timeout is 10s, which a turned-up FUZZ_GAMES blows past.
+      // The default hook timeout is 10s, which a turned-up FUZZ_GAMES or
+      // FUZZ_MAX_ACTIONS blows past. Scale with both, generously.
     },
-    Math.max(30_000, FUZZ_GAMES * 1_000),
+    Math.max(30_000, FUZZ_GAMES * MAX_ACTIONS * 3),
   );
 
   it(`plays ${FUZZ_GAMES} games without breaking an invariant`, () => {
