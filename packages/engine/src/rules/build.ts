@@ -42,6 +42,19 @@ export const buildRoad = (
   events.push({ type: 'RoadPlaced', player: playerId, edge });
 };
 
+/** A road from the road building card: placed exactly like any other, but free. */
+export const placeFreeRoad = (
+  draft: GameState,
+  playerId: PlayerId,
+  edge: EdgeId,
+  events: GameEvent[],
+): void => {
+  const player = playerIn(draft, playerId);
+  draft.roads[edge] = playerId;
+  player.stock.roads -= 1;
+  events.push({ type: 'RoadPlaced', player: playerId, edge });
+};
+
 export const buildSettlement = (
   draft: GameState,
   playerId: PlayerId,

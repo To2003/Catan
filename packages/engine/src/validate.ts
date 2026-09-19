@@ -1,5 +1,5 @@
 import { COSTS, RESOURCES, emptyBundle } from './constants.js';
-import { playableCount } from './rules/devCards.js';
+import { hasLegalFreeRoad, playableCount } from './rules/devCards.js';
 import { canTradeMaritime } from './rules/trade.js';
 import {
   canAfford,
@@ -75,13 +75,17 @@ const validateRoad = (
 
   const phase = state.phase;
   const inSetup = phase.kind === 'setup' && phase.step === 'road';
-  if (!inSetup && phase.kind !== 'main') return 'WRONG_PHASE';
+  const freeRoad = phase.kind === 'roadBuilding';
+  if (!inSetup && !freeRoad && phase.kind !== 'main') return 'WRONG_PHASE';
 
   if (state.roads[edge] !== undefined) return 'OCCUPIED';
 
   const player = playerOf(state, playerId);
   if (!player) return 'INVALID_TARGET';
   if (player.stock.roads <= 0) return 'NOT_ENOUGH_PIECES';
+
+  // The road building card pays for these (SPEC.md §4.10).
+  if (freeRoad) return roadConnects(state, playerId, edge) ? null : 'NOT_CONNECTED';
 
   if (inSetup) {
     // The setup road leaves the settlement just placed, not any other of its
@@ -238,6 +242,17 @@ export const validateAction = (
 
     case 'playMonopoly':
       return validatePlayCard(state, playerId, 'monopoly');
+
+    case 'playRoadBuilding': {
+      const error = validatePlayCard(state, playerId, 'roadBuilding');
+      if (error !== null) return error;
+      // With nowhere legal to build, the card is refused rather than wasted
+      // (SPEC.md §12.8).
+      const player = playerOf(state, playerId);
+      if (!player) return 'INVALID_TARGET';
+      if (player.stock.roads <= 0) return 'NO_LEGAL_PLACEMENT';
+      return hasLegalFreeRoad(state, playerId) ? null : 'NO_LEGAL_PLACEMENT';
+    }
 
     case 'maritimeTrade': {
       if (state.phase.kind !== 'main') return 'WRONG_PHASE';

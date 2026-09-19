@@ -2,6 +2,7 @@ import { COSTS, RESOURCES } from '../constants.js';
 import type { GameEvent } from '../events.js';
 import type { DevCard, GameState, PlayerId, ReadonlyGameState, Resource } from '../types.js';
 import { recomputeLargestArmy } from './largestArmy.js';
+import { roadConnects } from './placement.js';
 
 /**
  * Development cards (SPEC.md §4.10).
@@ -129,3 +130,51 @@ export const playMonopoly = (
   // Public with the breakdown: at a table everyone sees who handed over what.
   events.push({ type: 'MonopolyResolved', player: playerId, resource, from, total });
 };
+
+/**
+ * Road building: two free roads (SPEC.md §4.10, §12.8).
+ *
+ * The card is spent even if only one road can be placed. What it may not do is
+ * leave the game waiting for a road that cannot exist, so the phase ends by
+ * itself as soon as there is no legal edge or no piece left; and if there is
+ * nowhere legal to build at all, validation refuses the card outright.
+ */
+export const playRoadBuilding = (
+  draft: GameState,
+  playerId: PlayerId,
+  events: GameEvent[],
+): void => {
+  consumeCard(draft, playerId, 'roadBuilding', events);
+  draft.phase = { kind: 'roadBuilding', remaining: 2 };
+  events.push({ type: 'RoadBuildingStarted', player: playerId, remaining: 2 });
+  events.push({ type: 'PhaseChanged', phase: draft.phase });
+};
+
+/** Ends the road building phase when nothing more can be placed. */
+export const advanceRoadBuilding = (
+  draft: GameState,
+  playerId: PlayerId,
+  placed: number,
+  events: GameEvent[],
+): void => {
+  const phase = draft.phase;
+  if (phase.kind !== 'roadBuilding') throw new Error('advanceRoadBuilding outside its phase');
+
+  const remaining = phase.remaining - 1;
+  const stock = playerIn(draft, playerId).stock.roads;
+  const somewhereToBuild = hasLegalFreeRoad(draft, playerId);
+
+  if (remaining > 0 && stock > 0 && somewhereToBuild) {
+    draft.phase = { kind: 'roadBuilding', remaining: 1 };
+  } else {
+    draft.phase = { kind: 'main' };
+    events.push({ type: 'RoadBuildingEnded', player: playerId, placed });
+  }
+  events.push({ type: 'PhaseChanged', phase: draft.phase });
+};
+
+/** Whether the player has anywhere legal to put a free road right now. */
+export const hasLegalFreeRoad = (state: ReadonlyGameState, playerId: PlayerId): boolean =>
+  state.board.edgeIds.some(
+    (edge) => state.roads[edge] === undefined && roadConnects(state, playerId, edge),
+  );

@@ -1,8 +1,15 @@
 import type { GameEvent } from './events.js';
-import { buildRoad, buildSettlement, upgradeToCity } from './rules/build.js';
+import { buildRoad, buildSettlement, placeFreeRoad, upgradeToCity } from './rules/build.js';
 import { rollDice } from './rules/dice.js';
 import { discard, moveRobber, steal } from './rules/robber.js';
-import { buyDevCard, playKnight, playMonopoly, playYearOfPlenty } from './rules/devCards.js';
+import {
+  advanceRoadBuilding,
+  buyDevCard,
+  playKnight,
+  playMonopoly,
+  playRoadBuilding,
+  playYearOfPlenty,
+} from './rules/devCards.js';
 import { maritimeTrade } from './rules/trade.js';
 import { endTurn } from './rules/turn.js';
 import { checkVictory } from './rules/victory.js';
@@ -54,8 +61,15 @@ export const applyAction = (
       break;
 
     case 'placeRoad':
-      if (draft.phase.kind === 'setup') placeSetupRoad(draft, playerId, action.edge, events);
-      else buildRoad(draft, playerId, action.edge, events);
+      if (draft.phase.kind === 'setup') {
+        placeSetupRoad(draft, playerId, action.edge, events);
+      } else if (draft.phase.kind === 'roadBuilding') {
+        const placed = 3 - draft.phase.remaining;
+        placeFreeRoad(draft, playerId, action.edge, events);
+        advanceRoadBuilding(draft, playerId, placed, events);
+      } else {
+        buildRoad(draft, playerId, action.edge, events);
+      }
       break;
 
     case 'upgradeCity':
@@ -92,6 +106,10 @@ export const applyAction = (
 
     case 'playMonopoly':
       playMonopoly(draft, playerId, action.resource, events);
+      break;
+
+    case 'playRoadBuilding':
+      playRoadBuilding(draft, playerId, events);
       break;
 
     case 'maritimeTrade':
