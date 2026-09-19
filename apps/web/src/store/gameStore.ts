@@ -4,6 +4,7 @@ import { socket } from '../net/socket.js';
 import {
   readLastRoom,
   readName,
+  readRoomFromUrl,
   readToken,
   writeLastRoom,
   writeName,
@@ -132,8 +133,18 @@ export const useGame = create<GameStore>((set, get) => {
       socket.emit('room:join', { code: code.toUpperCase(), name, ...(token ? { token } : {}) });
     },
     resume: () => {
-      // A reload should put you back at the table rather than at the front
-      // door: the seat is still yours as long as the token is.
+      // A room handed over in the URL wins: that is how the dev fixture seats
+      // three windows, and how a reconnect link works.
+      const fromUrl = readRoomFromUrl();
+      if (fromUrl) {
+        writeToken(fromUrl.code, fromUrl.token);
+        writeName(fromUrl.name);
+        socket.emit('room:join', fromUrl);
+        return;
+      }
+
+      // Otherwise a reload should put you back at the table rather than at the
+      // front door: the seat is still yours as long as the token is.
       const code = readLastRoom();
       const name = readName();
       if (!code || !name) return;

@@ -218,17 +218,30 @@ describe('answering an offer', () => {
     ).toEqual({ ok: false, error: 'NOT_OFFER_TARGET' });
   });
 
-  it('happens once per player', () => {
+  it('can be changed while the offer is open', () => {
+    // At a table people say no and then think again. Nothing rides on the
+    // answer: confirmTrade revalidates both hands when the deal is closed.
     const { state } = openOffer();
     const offerId = state.tradeOffers[0]?.id ?? '';
-    const { state: after } = applyOrThrow(state, BRUNO.id, {
+
+    const rejected = applyOrThrow(state, BRUNO.id, {
       type: 'respondOffer',
       offerId,
       response: 'reject',
-    });
-    expect(
-      applyAction(after, BRUNO.id, { type: 'respondOffer', offerId, response: 'accept' }),
-    ).toEqual({ ok: false, error: 'ALREADY_RESPONDED' });
+    }).state;
+    expect(rejected.tradeOffers[0]?.responses[BRUNO.id]).toBe('rejected');
+
+    const reconsidered = applyOrThrow(rejected, BRUNO.id, {
+      type: 'respondOffer',
+      offerId,
+      response: 'accept',
+    }).state;
+    expect(reconsidered.tradeOffers[0]?.responses[BRUNO.id]).toBe('accepted');
+
+    // And the change is what the active player sees to confirm with.
+    expect(getPlayerView(reconsidered, ANA.id).legalMoves.offers[offerId]?.confirmWith).toEqual([
+      BRUNO.id,
+    ]);
   });
 });
 

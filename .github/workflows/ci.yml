@@ -26,3 +26,31 @@ jobs:
       - run: pnpm format:check
 
       - run: pnpm test
+
+      # The tests run against the sources, so the production bundle needs its
+      # own proof that it starts. It was a bundling detail that broke it last
+      # time, with everything else green.
+      - name: Build the server and start it from the bundle
+        run: |
+          pnpm --filter @tierra-austral/server build
+          NODE_ENV=production DB_PATH="$RUNNER_TEMP/ci.db" PORT=3001 \
+            node apps/server/build/index.js &
+          server_pid=$!
+
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://localhost:3001/health > /tmp/health.json; then
+              break
+            fi
+            sleep 1
+          done
+
+          cat /tmp/health.json
+          grep -q '"ok":true' /tmp/health.json
+
+          # Production means no dev routes, and this is where that is checked
+          # against the real binary rather than against a unit test.
+          status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            http://localhost:3001/dev/fixture)
+          test "$status" = "404"
+
+          kill "$server_pid"

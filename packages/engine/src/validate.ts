@@ -275,8 +275,8 @@ const validateRespondOffer = (
   if (!offer) return 'OFFER_NOT_FOUND';
   if (offer.from === playerId) return 'NOT_OFFER_TARGET';
   if (!offer.to.includes(playerId)) return 'NOT_OFFER_TARGET';
-  // One answer each: to change your mind, the offer has to come round again.
-  if ((offer.responses[playerId] ?? 'pending') !== 'pending') return 'ALREADY_RESPONDED';
+  // Answers can change while the offer is open, the way they do at a table.
+  // Nothing rides on them: confirmTrade revalidates both hands anyway.
   return null;
 };
 

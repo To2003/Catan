@@ -27,7 +27,6 @@ export const ERROR_TEXT: Record<ErrorCode, string> = {
   OFFER_NOT_FOUND: 'Esa oferta ya no está',
   NOT_OFFER_TARGET: 'Esa oferta no es para vos',
   NOT_OFFER_OWNER: 'Esa oferta no es tuya',
-  ALREADY_RESPONDED: 'Ya respondiste esa oferta',
   NOT_ACCEPTED: 'Ese jugador no aceptó',
   COUNTER_NOT_ALLOWED: 'No se puede contraofertar una contraoferta',
 };

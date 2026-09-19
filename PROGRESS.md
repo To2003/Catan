@@ -611,11 +611,33 @@ SPEC", y ninguna rompe una regla de arquitectura.
 
 ### Verificado de menos
 
-- **La pantalla de fin y la revancha** se probaron por sus reglas en el server (`GAME_NOT_OVER`,
-  `NOT_HOST`) y por tipos, **no** de punta a punta en el browser: llegar a 10 PV haciendo clics
-  lleva demasiado tiempo. El fuzz sí termina partidas, pero no pasa por la UI.
 - **El deploy no se hizo** (necesita tus cuentas). Sí se verificó que el bundle de producción
-  arranca y responde `/health`, y que la imagen se describe entera en el `Dockerfile`.
+  arranca, responde `/health` y **no** expone las rutas de desarrollo, y que la imagen se describe
+  entera en el `Dockerfile`.
+
+---
+
+## Cierre: ajustes post-M8
+
+1. **Las respuestas a ofertas se pueden cambiar** (aceptar ↔ rechazar) mientras la oferta siga
+   abierta. `ALREADY_RESPONDED` se eliminó de `ErrorCode`. Sin riesgo: `confirmTrade` revalida las
+   dos manos al cerrar.
+2. **Fixture de partida terminada** (`GET /dev/fixture?back=N`): juega una partida entera al azar,
+   le recorta las últimas N acciones y la carga como sala con tokens conocidos. Funciona porque una
+   sala es `seed` + acciones: no es un estado inventado, es una partida real frenada a N jugadas del
+   final. **No se monta en producción** (`NODE_ENV`), con test que verifica el 404 y un paso de CI
+   que lo comprueba contra el binario real.
+   - La respuesta incluye `nextActions`, las jugadas recortadas, para reproducir el final exacto.
+   - La web acepta `?room=CODE&token=UUID&name=X` para sentar cada ventana en su asiento.
+3. **CI buildea el server, lo arranca desde el bundle y pega a `/health`.** Los tests corren sobre
+   las fuentes: el bug de `node:sqlite` en el bundle pasó typecheck, lint y 311 tests antes de
+   fallar al arrancar. Ese paso es el que lo habría agarrado.
+
+**Verificación de punta a punta del final** (lo que faltaba): con el fixture, tres ventanas, la
+jugada ganadora hecha a mano desde la UI. Pantalla de fin correcta (`Ganó Bruno`, "10 puntos, con 2
+cartas de PV escondidas"), desglose por jugador — Bruno 6 de ciudades + 2 de gran ejército + 2 de
+cartas = 10; las cartas ajenas se ven como `—` salvo las del ganador y las propias —, los no-host
+viendo "Esperando la revancha", y la revancha dejando a los tres en Setup 1 de una partida nueva.
 
 ---
 

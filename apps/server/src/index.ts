@@ -7,6 +7,7 @@ import { Server } from 'socket.io';
 import { HEX_COUNT } from '@tierra-austral/engine';
 import { registerHandlers, type GameServer } from './handlers.js';
 import { MAX_MESSAGE_BYTES } from './limits.js';
+import { registerDevRoutes } from './devRoutes.js';
 import { sqliteStore } from './persistence.js';
 import { restoreRooms, sweepIdleRooms, useStore } from './rooms.js';
 
@@ -24,6 +25,12 @@ app.use(cors({ origin: WEB_ORIGIN }));
 app.get('/health', (_req, res) => {
   res.json({ ok: true, hexes: HEX_COUNT });
 });
+
+// Fixtures for looking at the end of a game without playing one. Never in
+// production.
+if (registerDevRoutes(app, WEB_ORIGIN)) {
+  console.log('dev routes on: GET /dev/fixture');
+}
 
 const httpServer = createServer(app);
 

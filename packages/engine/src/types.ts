@@ -78,8 +78,6 @@ export type ErrorCode =
   | 'NOT_OFFER_TARGET'
   /** Acting on an offer that is not yours. */
   | 'NOT_OFFER_OWNER'
-  /** Already answered this offer. */
-  | 'ALREADY_RESPONDED'
   /** Confirming with somebody who has not accepted. */
   | 'NOT_ACCEPTED'
   /** Countering a counteroffer: negotiation is one level deep (SPEC.md §12.6). */

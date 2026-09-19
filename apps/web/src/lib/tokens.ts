@@ -65,3 +65,19 @@ export const writeName = (name: string): void => {
     // Nothing to do.
   }
 };
+
+/**
+ * A room handed over in the URL: `?room=CODE&token=UUID&name=Ana`.
+ *
+ * It is how the dev fixture seats three windows at a finished game, and it is
+ * also a perfectly good reconnect link: the token is required either way, so
+ * this grants nothing that holding the token did not already grant.
+ */
+export const readRoomFromUrl = (): { code: string; token: string; name: string } | undefined => {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('room');
+  const token = params.get('token');
+  const name = params.get('name');
+  if (!code || !token || !name) return undefined;
+  return { code: code.toUpperCase(), token, name };
+};

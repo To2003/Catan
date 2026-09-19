@@ -55,6 +55,32 @@ Abrí **tres ventanas de incógnito** (no tres pestañas de la misma ventana: co
 Si cambiás el puerto de la web, el server necesita `WEB_ORIGIN` apuntando ahí o el
 navegador bloquea el socket por CORS.
 
+### Ver el final de una partida sin jugarla
+
+Llegar a 10 PV a clics lleva una hora. Como una sala es `seed` + acciones, hay un comando de
+desarrollo que juega una partida entera al azar, le recorta las últimas N acciones y la carga
+como sala, con los tokens de los tres jugadores:
+
+```bash
+curl -s "http://localhost:3001/dev/fixture?back=1" | jq
+```
+
+Devuelve el código de sala, un token por jugador, los tres links listos para abrir (uno por
+ventana de incógnito) y `nextActions`: las jugadas que recortó, la última de las cuales gana la
+partida. Con `back=1` la partida queda **a una jugada del final**.
+
+```json
+{
+  "code": "DEV60",
+  "actionsKept": 909,
+  "actionsDropped": 1,
+  "nextActions": [{ "playerId": "…", "action": { "type": "playKnight" } }],
+  "links": ["http://localhost:5173/?room=DEV60&token=…&name=Ana", "…"]
+}
+```
+
+La ruta **no existe en producción** (`NODE_ENV=production` → 404), y hay un test que lo fija.
+
 ### Modos de desarrollo
 
 | URL         | Qué es                                                                                |

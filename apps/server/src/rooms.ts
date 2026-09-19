@@ -210,6 +210,11 @@ export const newSeat = (name: string): Seat => ({
 
 export const getRoom = (code: string): Room | undefined => rooms.get(code);
 
+/** Puts a room straight into the registry. Only the dev fixture needs this. */
+export const putRoom = (room: Room): void => {
+  rooms.set(room.code, room);
+};
+
 export const seatOf = (room: Room, playerId: PlayerId): Seat | undefined =>
   room.seats.find((seat) => seat.playerId === playerId);
 
