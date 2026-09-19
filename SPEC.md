@@ -579,6 +579,8 @@ Los PV se chequean **después de cada acción del jugador activo** y también **
 
 ### 12.6 Contraofertas (aclara §4.9)
 
+Decisiones de M7 que el spec no fijaba: al **crear** una oferta se exige que el proponente tenga las cartas (además de revalidar al confirmar); cada jugador responde **una sola vez** por oferta; confirmar un trato cierra **solo** esa oferta y sus contraofertas, las demás siguen abiertas; y los ids de oferta son `o<version>`, deterministas para que el replay funcione.
+
 - El jugador activo puede **confirmar una contraoferta directamente**, como si fuera una oferta más.
 - Las contraofertas **no** cuentan contra el límite de 3 ofertas abiertas. Ese límite aplica solo a las ofertas creadas por el jugador activo.
 - Cada jugador puede tener como máximo **1 contraoferta viva por oferta original**. Si manda otra, **reemplaza** a la anterior.

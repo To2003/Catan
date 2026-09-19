@@ -530,6 +530,95 @@ SQLite, pulido y deploy.
 
 ---
 
+## M7 — Comercio entre jugadores ✅
+
+**Qué quedó hecho**
+
+- Ofertas del jugador activo (máximo 3 propias), respuestas, contraofertas de un nivel,
+  confirmación con revalidación y cancelación.
+- `respondOffer`, `counterOffer` y `cancelOffer` se suman a las acciones concurrentes.
+- Las ofertas viajan en la vista (son públicas) y `legalMoves.offers` dice qué puede hacer cada
+  jugador con cada una.
+- **`NOT_IMPLEMENTED` eliminado de `ErrorCode`**: la lista de `notImplemented.test.ts` quedó vacía.
+- UI: panel para armar ofertas, ofertas entrantes con Aceptar / Rechazar / Contraofertar, y para el
+  activo un botón "Cerrar con X" por cada jugador que aceptó.
+
+### Decisiones técnicas de M7
+
+1. **Los ids de oferta salen de `version`.** El engine no tiene aleatoriedad para gastar y tiene que
+   seguir siendo reproducible; como cada acción crea a lo sumo una oferta, la versión en la que
+   corre ya es única (`o12`).
+2. **Confirmar revalida las dos manos.** Una oferta se queda en la mesa mientras el juego avanza: si
+   alguno ya no puede pagar, se rechaza con `INSUFFICIENT_RESOURCES` y **la oferta sigue abierta**.
+3. **Dos chequeos se separaron de la validación**: "¿puedo abrir una oferta?" y "¿puedo
+   contraofertar esta?". La UI necesita preguntarlo **antes** de que el jugador elija cartas, y una
+   sonda con cartas inventadas responde otra pregunta (de hecho fallaba con
+   `INSUFFICIENT_RESOURCES`). `legal.ts` usa esos dos, así el panel solo muestra botones que el
+   motor ya aprobó.
+4. **Cancelar es cuestión de dueño, no de turno.** Quien contraofertó puede retirarla mientras juega
+   otro.
+
+---
+
+## M8 — Persistencia, pulido y preparación del deploy ✅
+
+**Qué quedó hecho**
+
+- **Persistencia con `node:sqlite`**: cada sala guarda `seed` + lista de acciones; al arrancar, el
+  server reproduce y restaura. Escritura dentro de la cola serial por sala.
+- **Limpieza** de salas con 24 h sin actividad, en memoria y en la base, cada hora.
+- **Build de producción** del server con tsup (el engine se compila adentro), `Dockerfile`,
+  `fly.toml` y `.dockerignore`.
+- **Pulido**: fin de partida con desglose, revancha en la misma sala, chat, dados animados, flash de
+  producción, sonidos sintetizados con botón de mute.
+- **README** con los pasos exactos de deploy y las variables de entorno.
+
+### Decisiones técnicas de M8
+
+1. **`node:sqlite` y no `better-sqlite3`** (la evaluación que M0 dejó anotada): viene con Node, así
+   que la imagen no tiene que compilar un módulo nativo. Sigue marcado como experimental; la API que
+   usamos son cinco llamadas y el costo de cambiarlo es un archivo.
+2. **Se guarda `seed` + acciones y nada derivado.** Restaurar es un replay, así que un estado
+   guardado no puede contradecir a las reglas de hoy: lo produce el motor.
+3. **`node:sqlite` se carga con `createRequire`.** Es más nuevo que la lista de builtins de esbuild,
+   así que el bundle de producción reescribía `import 'node:sqlite'` como `import 'sqlite'` — un
+   paquete que no existe — y **el server solo fallaba al arrancar**. Un `require` en runtime queda
+   fuera del alcance del bundler. Lo encontré haciendo el smoke test del bundle, no en los tests.
+4. **Los sonidos se sintetizan** con la Web Audio API: no hay archivos que servir ni licencias que
+   revisar, y nada que cargar antes del primer clic.
+5. **Las animaciones se re-disparan remontando**, no con `setState` en un efecto (que además el
+   linter de React marca). Las dos respetan `prefers-reduced-motion`.
+
+---
+
+## Decisiones tomadas sin consulta
+
+Pendientes de revisión. Todas se eligieron por el criterio "lo más conservador y consistente con el
+SPEC", y ninguna rompe una regla de arquitectura.
+
+| #   | Tema                                                  | Qué elegí                                                                                              | Por qué                                                                                                                         |
+| --- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Ofrecer lo que no tenés**                           | Al **crear** una oferta se exige que el proponente tenga las cartas, además de revalidar al confirmar  | El SPEC (§12.5) solo pide lados no vacíos y disjuntos. Permitir ofertas impagables llena la mesa de humo; es lo más restrictivo |
+| 2   | **Una respuesta por jugador**                         | `respondOffer` se puede mandar **una sola vez** por oferta (`ALREADY_RESPONDED`)                       | El SPEC no dice si se puede cambiar de opinión. Lo restrictivo es que no                                                        |
+| 3   | **Qué pasa con las demás ofertas al cerrar un trato** | Se cierra **solo** la oferta confirmada y sus contraofertas; las otras siguen abiertas                 | §4.9 enumera qué cancela ofertas (cancelar y fin de turno) y no incluye confirmar. Mínima intervención                          |
+| 4   | **Ids de oferta**                                     | `o<version>`                                                                                           | Determinista y reproducible; el engine no puede usar aleatoriedad para esto                                                     |
+| 5   | **Confirmar una contraoferta**                        | El activo la cierra directo, sin aceptación previa (§12.6), y `withPlayer` tiene que ser quien la hizo | §12.6 dice que se puede confirmar "como si fuera una oferta más"; la aceptación implícita es haberla propuesto                  |
+| 6   | **Empate sin titular en camino más largo**            | Si nadie tiene el bono y dos llegan a 5 a la vez, queda **vacante**                                    | §12.2 resuelve empates a vacante. En la práctica es inalcanzable (se recalcula por acción)                                      |
+| 7   | **La presencia no entra al replay**                   | `setConnected` es un helper puro, no una acción                                                        | Conectarse no es parte de la historia de la partida                                                                             |
+| 8   | **Revancha**                                          | Semilla nueva, lista de acciones vacía, mismos asientos y mismo host                                   | Una revancha es una partida nueva; nada del anterior se conserva                                                                |
+| 9   | **Chat adelantado a M6**                              | El relay mínimo entró con los límites                                                                  | Los límites que pediste no tenían qué limitar sin chat                                                                          |
+| 10  | **Sonidos sintetizados**                              | Web Audio, sin archivos                                                                                | Evita licencias y descargas; se puede reemplazar por samples sin tocar el resto                                                 |
+
+### Verificado de menos
+
+- **La pantalla de fin y la revancha** se probaron por sus reglas en el server (`GAME_NOT_OVER`,
+  `NOT_HOST`) y por tipos, **no** de punta a punta en el browser: llegar a 10 PV haciendo clics
+  lleva demasiado tiempo. El fuzz sí termina partidas, pero no pasa por la UI.
+- **El deploy no se hizo** (necesita tus cuentas). Sí se verificó que el bundle de producción
+  arranca y responde `/health`, y que la imagen se describe entera en el `Dockerfile`.
+
+---
+
 ## Aclaraciones de reglas resueltas
 
 Las respuestas a las ambigüedades del spec están incorporadas a
