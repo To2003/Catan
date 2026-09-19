@@ -71,9 +71,7 @@ describe('validateAction: turn and phase gates', () => {
   it('reports actions whose milestone has not landed as NOT_IMPLEMENTED', () => {
     const state = mainState();
     expect(validateAction(state, ANA.id, { type: 'buyDevCard' })).toBe('NOT_IMPLEMENTED');
-    expect(
-      validateAction(state, ANA.id, { type: 'maritimeTrade', give: 'wood', want: 'ore' }),
-    ).toBe('NOT_IMPLEMENTED');
+    expect(validateAction(state, ANA.id, { type: 'playKnight' })).toBe('NOT_IMPLEMENTED');
   });
 });
 

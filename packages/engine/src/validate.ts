@@ -1,4 +1,5 @@
 import { COSTS, RESOURCES } from './constants.js';
+import { canTradeMaritime } from './rules/trade.js';
 import {
   canAfford,
   edgeOf,
@@ -34,7 +35,6 @@ const NOT_YET_IMPLEMENTED = new Set([
   'playRoadBuilding',
   'playYearOfPlenty',
   'playMonopoly',
-  'maritimeTrade',
   'createOffer',
   'respondOffer',
   'counterOffer',
@@ -196,6 +196,12 @@ export const validateAction = (
       return validateCity(state, playerId, action.vertex);
     case 'rollDice':
       return state.phase.kind === 'preRoll' ? null : 'WRONG_PHASE';
+    case 'maritimeTrade': {
+      if (state.phase.kind !== 'main') return 'WRONG_PHASE';
+      const player = playerOf(state, playerId);
+      if (!player) return 'INVALID_TARGET';
+      return canTradeMaritime(state, playerId, action.give, action.want, player.resources);
+    }
     case 'moveRobber':
       return validateMoveRobber(state, action.hex);
     case 'steal':

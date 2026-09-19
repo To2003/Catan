@@ -176,6 +176,10 @@ END_TURN
 
 Solo el **jugador activo** comercia, y siempre **después de tirar los dados**.
 
+- **La tasa la calcula el motor, nunca el cliente.** La acción `maritimeTrade` dice solo qué se da y qué se pide; cuántas cartas cuesta sale de los edificios del jugador. Un cliente que pudiera mandar su propia tasa podría mandar 1:1.
+- Cada acción entrega **1 unidad** del recurso pedido. Para pedir 2, van 2 acciones.
+- Se usa siempre la **mejor** tasa disponible para ese recurso: 2:1 con puerto propio de ese recurso, si no 3:1 con puerto genérico, si no 4:1.
+- Una **ciudad conserva el puerto** del asentamiento que mejoró, y un asentamiento colocado en el setup ya da acceso: el puerto es una propiedad del vértice.
 - **Con el banco:** 4 iguales por 1 cualquiera.
 - **Con un puerto 3:1:** 3 iguales por 1, si el jugador tiene un edificio en ese puerto.
 - **Con un puerto 2:1:** 2 del recurso del puerto por 1, con la misma condición.

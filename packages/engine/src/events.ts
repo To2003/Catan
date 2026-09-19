@@ -98,6 +98,17 @@ export type GameEvent =
       readonly visibleTo: readonly PlayerId[];
     }
 
+  /* Maritime trade (SPEC.md §4.9) */
+  | {
+      readonly type: 'MaritimeTraded';
+      readonly player: PlayerId;
+      readonly give: Resource;
+      /** How many cards of `give` went to the bank: the rate the engine worked out. */
+      readonly gave: number;
+      readonly want: Resource;
+      readonly rate: number;
+    }
+
   /* Turn flow */
   | { readonly type: 'PhaseChanged'; readonly phase: Phase }
   | { readonly type: 'TurnEnded'; readonly player: PlayerId; readonly next: PlayerId }

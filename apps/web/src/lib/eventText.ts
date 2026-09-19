@@ -63,6 +63,10 @@ export const eventText = (event: GameEvent, nameOf: (id: PlayerId) => string): s
       return `${nameOf(event.thief)} le roba una carta a ${nameOf(event.victim)}`;
     case 'ResourceStolen':
       return `  La carta robada es ${RESOURCE_LABELS[event.resource]}`;
+    case 'MaritimeTraded':
+      return `${nameOf(event.player)} cambia ${event.gave} ${RESOURCE_LABELS[event.give]} por 1 ${
+        RESOURCE_LABELS[event.want]
+      } (${event.rate}:1)`;
     case 'PhaseChanged':
       return `Fase: ${event.phase.kind}`;
     case 'TurnEnded':

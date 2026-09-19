@@ -7,10 +7,12 @@ import {
   createGame,
   createRng,
   legalCitySpots,
+  legalMaritimeTrades,
   legalRoadSpots,
   legalRobberHexes,
   legalSettlementSpots,
   legalStealTargets,
+  maritimeRate,
   nextInt,
   shuffle,
   victoryPoints,
@@ -34,10 +36,9 @@ import { SEATS, at, everyRoadTouchesOwnNetwork } from './helpers.js';
  * builds the move list across *all* players, and a deadlock means no player
  * anywhere has a legal action.
  *
- * Without trade, games still get stuck — nobody can afford anything and every
- * turn is roll-and-pass. That is expected, not a failure: the run stops after
- * MAX_ACTIONS. What *is* a failure is having no legal action at all, which
- * would mean the engine deadlocked.
+ * A run stops after MAX_ACTIONS, which is a stop and not a failure. What *is*
+ * a failure is having no legal move at all, which would mean the engine
+ * deadlocked.
  *
  * FUZZ_GAMES tunes how many games to play; CI runs the default in a couple of
  * seconds, and locally it is worth turning up.
@@ -175,6 +176,11 @@ const legalMoves = (state: ReadonlyGameState, rng: RngState): { moves: Move[]; r
     ...legalCitySpots(state, playerId).map((vertex): Action => ({ type: 'upgradeCity', vertex })),
     ...legalRobberHexes(state, playerId).map((hex): Action => ({ type: 'moveRobber', hex })),
     ...legalStealTargets(state, playerId).map((target): Action => ({ type: 'steal', target })),
+    ...legalMaritimeTrades(state, playerId).map(({ give, want }): Action => ({
+      type: 'maritimeTrade',
+      give,
+      want,
+    })),
   ];
   if (phase.kind === 'preRoll') actions.push({ type: 'rollDice' });
   if (phase.kind === 'main') actions.push({ type: 'endTurn' });
@@ -267,6 +273,20 @@ const checkMoveEffect = (
     expect(bankAfter, `${context} — discards go back to the bank`).toBe(bankBefore + owed);
   }
 
+  if (move.action.type === 'maritimeTrade') {
+    // A trade is with the bank: one card in, `rate` cards out, nothing created.
+    const { give: given, want } = move.action;
+    const rate = maritimeRate(before, move.playerId, given);
+    expect(handOf(after, move.playerId)[given], `${context} — gave the rate`).toBe(
+      handOf(before, move.playerId)[given] - rate,
+    );
+    expect(handOf(after, move.playerId)[want], `${context} — got one card`).toBe(
+      handOf(before, move.playerId)[want] + 1,
+    );
+    expect(after.bank[given], `${context} — bank took the cards`).toBe(before.bank[given] + rate);
+    expect(after.bank[want], `${context} — bank paid one card`).toBe(before.bank[want] - 1);
+  }
+
   if (move.action.type === 'steal') {
     const victim = move.action.target;
     expect(after.bank, `${context} — a steal does not touch the bank`).toEqual(before.bank);
@@ -308,6 +328,16 @@ const checkLegalMatchesValidate = (state: ReadonlyGameState, playerId: PlayerId)
   for (const player of state.players) {
     const action: Action = { type: 'steal', target: player.id };
     expect(targets.has(player.id)).toBe(applyAction(state, playerId, action).ok);
+  }
+
+  const trades = new Set(
+    legalMaritimeTrades(state, playerId).map((trade) => `${trade.give}->${trade.want}`),
+  );
+  for (const give of RESOURCES) {
+    for (const want of RESOURCES) {
+      const action: Action = { type: 'maritimeTrade', give, want };
+      expect(trades.has(`${give}->${want}`)).toBe(applyAction(state, playerId, action).ok);
+    }
   }
 };
 
@@ -415,10 +445,10 @@ describe('fuzzing random games', () => {
     }
   });
 
-  it('may get stuck without trade, which is not an error', () => {
-    // Random play with no trading rarely finishes inside the action limit. The
-    // robber redistributes cards but does not unstick a game on its own; that
-    // is what M4 is for.
+  it('may still run out of actions, which is not an error', () => {
+    // With maritime trade most games do finish, given room: at 3000 actions
+    // 38 of 40 produce a winner. At the default 400 they mostly do not, and a
+    // run that stops at the limit is a stop, not a failure.
     const stuck = games.filter((game) => game.stoppedBecause === 'actionLimit');
     expect(stuck.length).toBeGreaterThanOrEqual(0);
   });

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   COSTS,
+  RESOURCES,
+  legalMaritimeTrades,
   legalCitySpots,
   legalRoadSpots,
   legalRobberHexes,
@@ -55,6 +57,17 @@ export const expectLegalMatchesValidate = (state: ReadonlyGameState, playerId: P
     const accepted = validateAction(state, playerId, { type: 'steal', target: player.id }) === null;
     expect(targets.has(player.id)).toBe(accepted);
   }
+
+  const trades = new Set(
+    legalMaritimeTrades(state, playerId).map((trade) => `${trade.give}->${trade.want}`),
+  );
+  for (const give of RESOURCES) {
+    for (const want of RESOURCES) {
+      const accepted =
+        validateAction(state, playerId, { type: 'maritimeTrade', give, want }) === null;
+      expect(trades.has(`${give}->${want}`)).toBe(accepted);
+    }
+  }
 };
 
 const firstEdge = at(board.edgeIds, 10);
@@ -86,6 +99,14 @@ const positions: Record<string, ReadonlyGameState> = {
     s.buildings[at(firstEdgeVertices, 1)] = { owner: BRUNO.id, type: 'settlement' };
     s.roads[firstEdge] = ANA.id;
     give(s, ANA.id, { wood: 5, brick: 5, sheep: 5, wheat: 5, ore: 5 });
+  }),
+
+  'main phase, a harbour and a payable hand': draft(game, (s) => {
+    s.currentPlayer = ANA.id;
+    s.phase = { kind: 'main' };
+    const port = board.vertexIds.find((vertex) => board.vertices[vertex]?.port === '3:1');
+    if (port) s.buildings[port] = { owner: ANA.id, type: 'city' };
+    give(s, ANA.id, { wood: 3, ore: 1 });
   }),
 
   'moving the robber': draft(game, (s) => {

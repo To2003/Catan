@@ -1,5 +1,6 @@
+import { RESOURCES } from './constants.js';
 import { isLegalAction } from './validate.js';
-import type { EdgeId, HexId, PlayerId, ReadonlyGameState, VertexId } from './types.js';
+import type { EdgeId, HexId, PlayerId, ReadonlyGameState, Resource, VertexId } from './types.js';
 
 /**
  * Legal moves, for highlighting them in the UI.
@@ -52,3 +53,17 @@ export const legalStealTargets = (
   state.players
     .map((player) => player.id)
     .filter((target) => isLegalAction(state, playerId, { type: 'steal', target }));
+
+/**
+ * Every maritime trade the player could make right now: at most 20 pairs, so
+ * unlike a discard this one enumerates comfortably.
+ */
+export const legalMaritimeTrades = (
+  state: ReadonlyGameState,
+  playerId: PlayerId,
+): readonly { give: Resource; want: Resource }[] =>
+  RESOURCES.flatMap((give) =>
+    RESOURCES.filter((want) =>
+      isLegalAction(state, playerId, { type: 'maritimeTrade', give, want }),
+    ).map((want) => ({ give, want })),
+  );

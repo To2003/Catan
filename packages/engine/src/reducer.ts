@@ -2,6 +2,7 @@ import type { GameEvent } from './events.js';
 import { buildRoad, buildSettlement, upgradeToCity } from './rules/build.js';
 import { rollDice } from './rules/dice.js';
 import { discard, moveRobber, steal } from './rules/robber.js';
+import { maritimeTrade } from './rules/trade.js';
 import { endTurn } from './rules/turn.js';
 import { checkVictory } from './rules/victory.js';
 import { placeSetupRoad, placeSetupSettlement } from './rules/setup.js';
@@ -74,6 +75,10 @@ export const applyAction = (
 
     case 'steal':
       steal(draft, playerId, action.target, events);
+      break;
+
+    case 'maritimeTrade':
+      maritimeTrade(draft, playerId, action.give, action.want, events);
       break;
 
     case 'endTurn':

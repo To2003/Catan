@@ -9,3 +9,4 @@ export * from './legal.js';
 export * from './reducer.js';
 export * from './rules/victory.js';
 export * from './rules/robber.js';
+export * from './rules/trade.js';
