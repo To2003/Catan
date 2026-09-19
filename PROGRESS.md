@@ -5,17 +5,17 @@ y después este archivo.
 
 ## Hitos
 
-| Hito | Contenido                                  | Estado        |
-| ---- | ------------------------------------------ | ------------- |
-| M0   | Monorepo, TS strict, lint, format, Vitest  | ✅ Completado |
-| M1   | Generación de tablero y render SVG         | ✅ Completado |
-| M2   | Motor: setup, dados, producción, construir | ✅ Completado |
-| M3   | 7, descarte, ladrón y robo                 | ✅ Completado |
-| M4   | Comercio con banco y puertos               | ✅ Completado |
-| M5   | Cartas de desarrollo, bonos y victoria     | ✅ Completado |
-| M6   | Server, salas, lobby y sincronización      | ⬜ Pendiente  |
-| M7   | Comercio entre jugadores con contraofertas | ⬜ Pendiente  |
-| M8   | Reconexión, SQLite, chat, pulido y deploy  | ⬜ Pendiente  |
+| Hito | Contenido                                        | Estado        |
+| ---- | ------------------------------------------------ | ------------- |
+| M0   | Monorepo, TS strict, lint, format, Vitest        | ✅ Completado |
+| M1   | Generación de tablero y render SVG               | ✅ Completado |
+| M2   | Motor: setup, dados, producción, construir       | ✅ Completado |
+| M3   | 7, descarte, ladrón y robo                       | ✅ Completado |
+| M4   | Comercio con banco y puertos                     | ✅ Completado |
+| M5   | Cartas de desarrollo, bonos y victoria           | ✅ Completado |
+| M6   | Server, salas, lobby, sincronización, reconexión | ✅ Completado |
+| M7   | Comercio entre jugadores con contraofertas       | ⬜ Pendiente  |
+| M8   | SQLite, pulido y deploy                          | ⬜ Pendiente  |
 
 ---
 
@@ -457,6 +457,76 @@ Con `FUZZ_MAX_ACTIONS=3000`, que es donde se ve: M3 terminaba **20 de 40**, M4 *
 
 - **M7 — sacar `NOT_IMPLEMENTED`** (ver arriba). En M5 se agregó `notImplemented.test.ts`, que fija
   la lista exacta de lo que falta: las cinco acciones de comercio entre jugadores.
+
+---
+
+## M6 — Server, salas, lobby y sincronización ✅
+
+**Qué quedó hecho**
+
+- **`view.ts`**: `getPlayerView` con todo lo oculto, y `legalMoves` viajando adentro de la vista.
+- **Server autoritativo**: salas con código, lobby con colores y "listo", partida, chat mínimo,
+  límites y rate limit.
+- **Seguridad**: identidad por sesión, validación de forma con zod, token secreto.
+- **Reconexión**, migración de host y `forceTurn`.
+- **Web en red**: Zustand y las pantallas Home, Lobby, Game y GameOver.
+- 282 tests en verde, 17 de ellos sobre sockets reales.
+
+**Nota de hitos:** reconexión y chat estaban anotados en M8 y se adelantaron acá. M8 queda con
+SQLite, pulido y deploy.
+
+### Decisiones técnicas de M6
+
+1. **La semilla se oculta junto con el `rngState`.** Con la semilla y la lista de acciones
+   públicas se reconstruye el mazo barajado y todas las tiradas futuras; ocultar solo el estado
+   del PRNG sería teatro.
+2. **La vista se arma campo por campo**, nunca borrando de una copia del estado. Un campo nuevo en
+   `GameState` no puede filtrarse por olvido: si no se agrega a la vista, no viaja.
+3. **`legalMoves` vive en el engine y la consumen los dos caminos**: el server la mete en la vista
+   y el hot-seat la calcula local. El cliente no puede llamar a `validate` porque no tiene el
+   estado, y la respuesta no es enseñarle las reglas: es que el motor le mande la lista, con el
+   **código** del motivo cuando una carta no se puede jugar. La UI solo traduce.
+4. **El chequeo de `expectedVersion` es solo para las acciones secuenciales del activo.** Con dos
+   jugadores descartando a la vez, el segundo recibiría `STALE_STATE` por una jugada válida. El
+   engine valida contra el estado del momento, así que ahí la versión no aporta nada. En M7 entran
+   `respondOffer` y `counterOffer` al mismo conjunto. Hay un test de integración con dos clientes
+   descartando sin esperarse.
+5. **La identidad sale de la sesión del socket**, nunca del payload, y los esquemas de zod son
+   estrictos: una clave de más es un mensaje rechazado, no una clave ignorada.
+6. **El server valida forma; el engine valida reglas.** Sobre la red los tipos de TypeScript no
+   existen: ahí paran `NaN`, `-1`, `1.5`, un recurso inventado y un id de 1000 caracteres.
+7. **Códigos de sala y semillas salen de `node:crypto`.** El PRNG del engine es del juego y es
+   determinista a propósito; un código de sala predecible dejaría entrar a cualquiera.
+8. **La presencia no es una acción.** Conectarse y desconectarse pasa por un helper puro
+   (`setConnected`) y **no** entra en la lista de acciones: no es parte de la historia de la
+   partida y un replay no debe reproducirla.
+9. **Una cola por sala**, aunque hoy todo sea síncrono, para que en M8 la escritura a SQLite no
+   tenga que meterse entre medio de una carrera.
+10. **El token se guarda por código de sala** en `localStorage`, y al recargar la app vuelve sola a
+    la última sala.
+
+### Qué se verifica con sockets reales
+
+17 tests levantan un server en un puerto efímero y conectan clientes de verdad:
+
+- Setup completo a tres jugadores siguiendo las `legalMoves` que manda el server.
+- Dos descartes simultáneos: ninguno recibe `STALE_STATE`.
+- Una acción con el `playerId` de otro es un **mensaje rechazado** y el tablero no se mueve.
+- 18 payloads malformados seguidos, cada uno rechazado, y después una acción real que sí entra —
+  que es la prueba de que el server sigue vivo.
+- Ningún token llega a nadie más que a su dueño, revisando **todos** los mensajes que recibió cada
+  cliente.
+- Ni la semilla, ni el `rngState`, ni el mazo salen jamás.
+- No se entra a una partida empezada sin token, ni con uno inventado; el dueño del token sí vuelve.
+- Segunda pestaña con el mismo token: gana la última.
+- Si el host se va, el rol migra.
+
+### Cambios al SPEC en M6
+
+- **§7.1**: reconexión con token por sala, última conexión gana, `GAME_IN_PROGRESS`, y el reloj de
+  los 2 minutos contando desde que el jugador está desconectado **y** bloqueando.
+- **§7.2**: `session`, `session:replaced` y `room:forceTurn`; la regla de `expectedVersion`; los
+  errores de transporte como union aparte; identidad por sesión y validación de forma.
 
 ---
 

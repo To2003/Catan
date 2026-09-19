@@ -422,28 +422,34 @@ Se hace un DFS sobre las aristas del jugador, arrancando desde cada vértice ext
 
 **Cliente → servidor**
 
-| Evento          | Payload                                       |
-| --------------- | --------------------------------------------- |
-| `room:create`   | `{ name }`                                    |
-| `room:join`     | `{ code, name, token? }`                      |
-| `room:setColor` | `{ color }`                                   |
-| `room:ready`    | `{ ready: boolean }`                          |
-| `room:start`    | — (solo el host)                              |
-| `game:action`   | `{ action: Action, expectedVersion: number }` |
-| `chat:send`     | `{ text }`                                    |
+| Evento           | Payload                                       |
+| ---------------- | --------------------------------------------- |
+| `room:create`    | `{ name }`                                    |
+| `room:join`      | `{ code, name, token? }`                      |
+| `room:setColor`  | `{ color }`                                   |
+| `room:ready`     | `{ ready: boolean }`                          |
+| `room:start`     | — (solo el host)                              |
+| `game:action`    | `{ action: Action, expectedVersion: number }` |
+| `chat:send`      | `{ text }`                                    |
+| `room:forceTurn` | — (solo el host, pasados 2 minutos)           |
 
 **Servidor → cliente**
 
-| Evento         | Payload                                      |
-| -------------- | -------------------------------------------- |
-| `room:state`   | jugadores, colores, estado de "listo" y host |
-| `game:state`   | `PlayerView` filtrado para ese jugador       |
-| `game:events`  | eventos nuevos para animaciones y log        |
-| `game:error`   | `{ code, message }`                          |
-| `chat:message` | `{ from, text, at }`                         |
+| Evento             | Payload                                                   |
+| ------------------ | --------------------------------------------------------- |
+| `room:state`       | jugadores, colores, estado de "listo" y host              |
+| `game:state`       | `PlayerView` filtrado para ese jugador                    |
+| `game:events`      | eventos nuevos para animaciones y log                     |
+| `game:error`       | `{ code, message }`                                       |
+| `chat:message`     | `{ from, text, at }`                                      |
+| `session`          | `{ playerId, token, code }` — **solo a su propio socket** |
+| `session:replaced` | — (el mismo token entró desde otra pestaña)               |
 
 - El servidor es **autoritativo**: el cliente nunca modifica el estado localmente, solo manda acciones.
-- Si `expectedVersion` no coincide con la versión actual, la acción se rechaza con `STALE_STATE` y el cliente se resincroniza.
+- **`expectedVersion` se chequea solo en las acciones secuenciales del jugador activo.** Las acciones concurrentes de jugadores no activos (`discard` hoy; `respondOffer` y `counterOffer` desde M7) no lo exigen: cuando dos jugadores descartan casi a la vez, el primero sube la versión y el segundo recibiría `STALE_STATE` por una jugada perfectamente válida. El engine valida cada acción contra el estado del momento en que se aplica, así que ahí la versión no aporta nada.
+- Los errores de transporte (`BAD_PAYLOAD`, `RATE_LIMITED`, `NO_SESSION`, `ROOM_NOT_FOUND`, `ROOM_FULL`, `NOT_HOST`, `GAME_IN_PROGRESS`, `TOO_SOON`…) son un union aparte del `ErrorCode` del motor: son de otra capa.
+- **La identidad sale de la sesión del socket.** Ningún payload lleva `playerId`, y los esquemas son estrictos: una clave de más es un mensaje rechazado.
+- **La forma de cada payload se valida en runtime** (zod) antes de que el engine lo vea. El server valida que el mensaje tenga sentido; el engine, que la jugada sea legal.
 - Después de cada acción válida, el servidor manda un `game:state` filtrado a cada socket de la sala y persiste la acción en SQLite.
 
 ---
