@@ -11,7 +11,7 @@ y después este archivo.
 | M1   | Generación de tablero y render SVG         | ✅ Completado |
 | M2   | Motor: setup, dados, producción, construir | ✅ Completado |
 | M3   | 7, descarte, ladrón y robo                 | ✅ Completado |
-| M4   | Comercio con banco y puertos               | ⬜ Pendiente  |
+| M4   | Comercio con banco y puertos               | ✅ Completado |
 | M5   | Cartas de desarrollo, bonos y victoria     | ⬜ Pendiente  |
 | M6   | Server, salas, lobby y sincronización      | ⬜ Pendiente  |
 | M7   | Comercio entre jugadores con contraofertas | ⬜ Pendiente  |
@@ -297,6 +297,70 @@ FUZZ_GAMES=50 FUZZ_MAX_ACTIONS=3000 pnpm --filter @tierra-austral/engine test fu
 ### Deuda técnica anotada
 
 - **M5 — sacar `NOT_IMPLEMENTED`** (sigue vigente, ver abajo).
+
+---
+
+## M4 — Comercio con el banco y puertos ✅
+
+**Qué quedó hecho**
+
+- **`maritimeTrade`**: solo el jugador activo, solo en `main`. Una acción entrega **1 unidad** del
+  recurso pedido.
+- **La tasa la calcula el motor**, nunca el cliente: la mejor disponible para ese recurso (2:1 con
+  puerto propio de ese recurso, si no 3:1 con genérico, si no 4:1).
+- **`availableMaritimeRates`** y **`legalMaritimeTrades`** en `legal.ts`, ambas en el test de
+  propiedad `legal ⟺ validate`.
+- Evento público `MaritimeTraded` con lo dado, lo recibido y la tasa usada.
+- Panel de comercio en el hot-seat.
+- 200 tests en verde.
+
+### Decisiones técnicas de M4
+
+1. **La acción no lleva la tasa.** `maritimeTrade` dice solo `give` y `want`. Un cliente que pudiera
+   mandar su propia tasa podría mandar 1:1, y en M6 estas acciones llegan por red. La tasa sale de
+   `maritimeRate(state, player, resource)`, que mira los puertos de los edificios del jugador.
+2. **El puerto es una propiedad del vértice**, no del edificio. De ahí salen gratis dos reglas que
+   igual tienen test: una **ciudad conserva** el puerto del asentamiento que mejoró, y un
+   asentamiento colocado **en el setup** ya da acceso.
+3. **`legalMaritimeTrades` sí se enumera** (20 pares como máximo), a diferencia del descarte. El
+   criterio sigue siendo el mismo: se enumera lo que es finito y chico, y `validate` es siempre el
+   que decide.
+4. **`canTradeMaritime` vive en `rules/trade.ts`**, no en `validate.ts`, para que la regla de la
+   tasa esté enunciada una sola vez y `validate` la consuma.
+
+### Mejoras al fuzz (previas al comercio)
+
+1. **Cuenta las partidas que simuló** y falla si no coincide con `FUZZ_GAMES`. Un run que no juega
+   nada — por una variable mal seteada o por un hook que vitest convierte en skip — ahora falla en
+   vez de pasar en verde. `FUZZ_GAMES` y `FUZZ_MAX_ACTIONS` además se parsean estrictos: si no son
+   enteros positivos, tiran.
+2. **Política con pesos** en vez de uniforme: construir y comerciar pesan más, `endTurn` menos.
+   Ayuda menos de lo que parece, porque la mayoría de los pasos ofrece una sola jugada legal: sobre
+   100 partidas, 15015 tiradas y 14960 fines de turno contra 864 asentamientos.
+
+### Medición del fuzz, hito por hito
+
+Con el tope por defecto de 400 acciones, 100 partidas:
+
+| Hito | Trabadas | Máx. PV (prom.) | Ciudades | Descartes |
+| ---- | -------- | --------------- | -------- | --------- |
+| M2   | 100/100  | 3,6             | —        | —         |
+| M3   | 100/100  | 3,8             | 214      | 3280      |
+| M4   | 99/100   | 4,3             | 222      | 702       |
+
+Con `FUZZ_MAX_ACTIONS=3000`, que es donde se ve de verdad: en M3 terminaban **20 de 40** partidas;
+con comercio terminan **38 de 40**, con una media de 1233 acciones y 9,9 PV del líder. El comercio
+es el desatascador que M3 anticipaba. Los descartes caen a la quinta parte porque los jugadores
+gastan en vez de acumular.
+
+```bash
+FUZZ_GAMES=40 FUZZ_MAX_ACTIONS=3000 pnpm --filter @tierra-austral/engine test fuzz
+```
+
+### Cambios al SPEC en M4
+
+- **§4.9**: la tasa la calcula el motor y no viaja en la acción; 1 unidad por acción; gana la mejor
+  tasa; la ciudad conserva el puerto y el asentamiento del setup ya da acceso.
 
 ---
 
