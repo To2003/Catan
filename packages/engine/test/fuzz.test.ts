@@ -14,6 +14,7 @@ import {
   legalStealTargets,
   maritimeRate,
   nextInt,
+  publicVictoryPoints,
   shuffle,
   victoryPoints,
   type Action,
@@ -220,8 +221,18 @@ const checkInvariants = (state: ReadonlyGameState, context: string): void => {
     expect(player.stock.cities + cities, `${context} — cities`).toBe(PIECE_STOCK.cities);
     expect(player.stock.roads + roads, `${context} — roads`).toBe(PIECE_STOCK.roads);
 
-    // 6. Points follow from what is on the board.
-    expect(victoryPoints(state, player.id), `${context} — points`).toBe(settlements + cities * 2);
+    // 6. Points follow from what is on the board, the cards in hand and the
+    // bonuses — counted here from scratch rather than through the engine's own
+    // helpers.
+    const vpCards = player.devCards.filter((card) => card === 'vp').length;
+    const bonuses =
+      (state.largestArmy === player.id ? 2 : 0) + (state.longestRoad?.owner === player.id ? 2 : 0);
+    expect(victoryPoints(state, player.id), `${context} — points`).toBe(
+      settlements + cities * 2 + vpCards + bonuses,
+    );
+    expect(publicVictoryPoints(state, player.id), `${context} — public points`).toBe(
+      settlements + cities * 2 + bonuses,
+    );
   }
 
   // 4. The distance rule holds across the whole board, not just where the last

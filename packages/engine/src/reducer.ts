@@ -1,6 +1,7 @@
 import type { GameEvent } from './events.js';
 import { buildRoad, buildSettlement, placeFreeRoad, upgradeToCity } from './rules/build.js';
 import { rollDice } from './rules/dice.js';
+import { recomputeLongestRoad } from './rules/longestRoad.js';
 import { discard, moveRobber, steal } from './rules/robber.js';
 import {
   advanceRoadBuilding,
@@ -122,6 +123,13 @@ export const applyAction = (
 
     default:
       return { ok: false, error: 'NOT_IMPLEMENTED' };
+  }
+
+  // A road or a settlement can change who has the longest road — a settlement
+  // even for players who did not act, since it can cut their network
+  // (SPEC.md §12.2).
+  if (action.type === 'placeRoad' || action.type === 'placeSettlement') {
+    recomputeLongestRoad(draft, events);
   }
 
   // Victory is checked after every action of the *active* player (SPEC.md
