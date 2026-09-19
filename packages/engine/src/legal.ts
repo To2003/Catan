@@ -1,4 +1,5 @@
 import { DEV_CARDS, RESOURCES } from './constants.js';
+import { availableMaritimeRates } from './rules/trade.js';
 import { isLegalAction, validateAction } from './validate.js';
 import type {
   Action,
@@ -100,6 +101,8 @@ export interface LegalMoves {
   readonly robberHexes: readonly HexId[];
   readonly stealTargets: readonly PlayerId[];
   readonly maritimeTrades: readonly { give: Resource; want: Resource }[];
+  /** The rate for every resource, so the UI can show it without computing it. */
+  readonly maritimeRates: Readonly<Record<Resource, number>>;
   /**
    * Playability per card type. Deliberately *not* called `devCards`: that name
    * belongs to a hand, and the view's leak test reads keys, not intentions.
@@ -150,6 +153,7 @@ export const legalMoves = (state: ReadonlyGameState, playerId: PlayerId): LegalM
     robberHexes: legalRobberHexes(state, playerId),
     stealTargets: legalStealTargets(state, playerId),
     maritimeTrades: legalMaritimeTrades(state, playerId),
+    maritimeRates: availableMaritimeRates(state, playerId),
     devCardOptions: devCardOptions(state, playerId),
     canBuyDevCard: isLegalAction(state, playerId, { type: 'buyDevCard' }),
     canRoll: canRollDice(state, playerId),

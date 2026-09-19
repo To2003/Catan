@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   RESOURCES,
   applyAction,
-  availableMaritimeRates,
   createGame,
   isVisibleTo,
   legalMoves,
@@ -130,7 +129,6 @@ export function HotSeatScreen() {
   const cities = useMemo(() => legalCitySpots(game, active), [game, active]);
   const roads = useMemo(() => legalRoadSpots(game, active), [game, active]);
   const robberHexes = useMemo(() => legalRobberHexes(game, active), [game, active]);
-  const rates = useMemo(() => availableMaritimeRates(game, active), [game, active]);
   // The same summary the server ships inside a view, computed locally here so
   // the panels are fed identically in both modes.
   const moves = useMemo(() => legalMoves(game, active), [game, active]);
@@ -408,7 +406,7 @@ export function HotSeatScreen() {
           />
 
           <TradePanel
-            rates={rates}
+            rates={moves.maritimeRates}
             hand={activePlayer?.resources ?? { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 0 }}
             bank={game.bank}
             enabled={game.phase.kind === 'main'}

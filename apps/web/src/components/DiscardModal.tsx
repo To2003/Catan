@@ -1,15 +1,10 @@
 import { useState } from 'react';
-import {
-  RESOURCES,
-  type DeepReadonly,
-  type Player,
-  type ResourceBundle,
-} from '@tierra-austral/engine';
+import { RESOURCES, type ResourceBundle } from '@tierra-austral/engine';
 import { RESOURCE_LABELS } from '../lib/terrainStyles.js';
 
 interface DiscardModalProps {
-  /** As it comes out of the state the engine hands over: deeply readonly. */
-  readonly player: DeepReadonly<Player>;
+  /** Only what the modal needs, so a hot-seat Player and a view's `me` both fit. */
+  readonly player: { readonly name: string; readonly resources: Readonly<ResourceBundle> };
   readonly owed: number;
   readonly onConfirm: (cards: Partial<ResourceBundle>) => void;
 }

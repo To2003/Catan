@@ -3,7 +3,9 @@ import { io, type Socket } from 'socket.io-client';
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001';
 
 /**
- * Single shared connection. The room and game protocol (SPEC.md §7.2) is wired
- * up in M6; for now this only proves the client can reach the server.
+ * The single shared connection to the authoritative server (SPEC.md §7.2).
+ *
+ * The client holds no game state of its own: it sends actions and renders the
+ * view the server sends back.
  */
 export const socket: Socket = io(SERVER_URL, { autoConnect: true });
