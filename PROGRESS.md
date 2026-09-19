@@ -10,7 +10,7 @@ y después este archivo.
 | M0   | Monorepo, TS strict, lint, format, Vitest  | ✅ Completado |
 | M1   | Generación de tablero y render SVG         | ✅ Completado |
 | M2   | Motor: setup, dados, producción, construir | ✅ Completado |
-| M3   | 7, descarte, ladrón y robo                 | ⬜ Pendiente  |
+| M3   | 7, descarte, ladrón y robo                 | ✅ Completado |
 | M4   | Comercio con banco y puertos               | ⬜ Pendiente  |
 | M5   | Cartas de desarrollo, bonos y victoria     | ⬜ Pendiente  |
 | M6   | Server, salas, lobby y sincronización      | ⬜ Pendiente  |
@@ -213,9 +213,90 @@ simultáneo.
   existe. Al cerrar M5 hay que agregar un test que verifique que **ninguna** acción devuelve
   ese código, y recién después eliminarlo de `ErrorCode`. Si el código sobrevive al hito, es
   que quedó un handler sin escribir.
-- **M3 — el 7.** `rules/dice.ts` tiene el `TODO(M3)`: hoy una tirada de 7 no produce nada y pasa
-  directo a `main`. Cuando entre el ladrón hay que sacar ese atajo y encadenar
+- ~~**M3 — el 7.**~~ Resuelto en M3: `rules/dice.ts` ya encadena
   `discard → moveRobber → steal`.
+
+---
+
+## M3 — El 7: descarte, ladrón y robo ✅
+
+**Qué quedó hecho**
+
+- **Descarte simultáneo**: al salir un 7, todos los que tienen más de 7 cartas deben `floor(n/2)`,
+  en un solo `discard` cada uno, sin importar de quién sea el turno. Las cartas vuelven al banco.
+  Si nadie pasa el límite, la fase se saltea.
+- **Ladrón**: se mueve a cualquier hex que no sea el actual, el desierto incluido. Los candidatos
+  al robo se calculan al moverlo.
+- **Robo**: siempre acción explícita, incluso con un solo candidato. Pasa de mano a mano; el banco
+  no se toca.
+- **Eventos privados**: `visibleTo` como campo, con `isVisibleTo` como único filtro.
+- **Hot-seat**: modal de descarte, hexes del ladrón resaltados y selector de víctima.
+- 184 tests en verde.
+
+**Qué NO está hecho a propósito:** el caballero es de M5. `moveRobber` y `steal` ya soportan
+`returnTo: 'preRoll'` y hay tests que lo cubren armando el estado a mano, así que cuando llegue la
+carta no hay que tocar las reglas: solo el handler que entra a la fase.
+
+### Decisiones técnicas de M3
+
+1. **El gate de turno se partió en dos.** Hasta M2 `validate` cortaba con un único
+   `currentPlayer !== playerId`. Ahora quién puede actuar depende de la acción: `discard` es de
+   cualquiera que deba cartas, el resto sigue siendo del jugador activo. El descarte es la única
+   fase simultánea del juego.
+2. **El chequeo de victoria se acotó al jugador activo.** Con jugadores no activos actuando, correr
+   `checkVictory` sobre el que acaba de descartar sería tratarlo como si fuera su turno (§12.4).
+3. **`visibleTo` es un campo, no un tipo de evento.** En M6 el server filtra por ese campo sin
+   conocer los tipos. El patrón es un evento público con el hecho + uno privado con el detalle
+   (`StealResolved`/`ResourceStolen`, `CardsDiscarded`/`DiscardDetail`), así filtrar es **descartar
+   un evento entero**, no reescribir un payload.
+4. **La fase `discard` lleva `source` y `returnTo` explícitos** (cambio al SPEC §5.2). Hoy solo un 7
+   llega al descarte, pero deducirlo de vuelta es justo la inferencia implícita que el caballero
+   rompería en M5. Hay un test que fija `source: 'seven'`, `returnTo: 'main'`.
+5. **El robo es explícito siempre.** Con un solo candidato el motor igual espera la acción; la UI
+   preselecciona. Que el motor resuelva solo sería un estado que el log no explica.
+6. **Robo determinista** (§12.11, paso 8): la mano de la víctima se expande en el orden
+   `wood, brick, sheep, wheat, ore`, una entrada por carta, y **una** extracción elige el índice.
+7. **Toda cantidad que llega en una acción se valida como entero no negativo.** `NaN`, decimales y
+   negativos se rechazan con `INVALID_AMOUNT`. En M6 las acciones llegan por red, donde los tipos de
+   TypeScript no existen: `validate` es la última línea de defensa. Hay tests con `1.5`, `-1`, `NaN`
+   e `Infinity`.
+8. **`discard` no se enumera en `legal.ts`.** Es una combinación de cartas, no una posición: el
+   espacio es combinatorio. Para el descarte alcanza `validate`, y el modal valida contra él
+   mientras el jugador arma la selección. Es la única excepción a "legal enumera todo" y está
+   escrita como tal en el docstring.
+
+### Fuzz
+
+Tres cambios sobre el de M2:
+
+- **Multi-jugador**: el fuzzer arma las jugadas de **todos** los que pueden actuar, no solo del
+  activo. El deadlock pasa a ser "ningún jugador tiene ninguna jugada legal".
+- **Descartes generados**: con el RNG del test se baraja la mano y se toman las primeras
+  `floor(n/2)`. Legal por construcción y distinto en cada corrida.
+- **Invariantes 7 a 9**: el ladrón siempre en un hex real; un descarte saca exactamente lo debido y
+  lo manda al banco; un robo mueve una carta entre dos manos sin tocar el banco.
+
+**Medición.** Con el tope por defecto de 400 acciones, 100 de 100 partidas siguen trabándose (media:
+máximo 3,6 PV, 8,5 edificios). Subiendo `FUZZ_MAX_ACTIONS=3000`, **la mitad de las partidas termina
+con un ganador** — en M2 no terminaba ninguna. El ladrón redistribuye pero no desatasca por sí solo;
+el desatascador de verdad es el comercio (M4).
+
+```bash
+FUZZ_GAMES=200 FUZZ_MAX_ACTIONS=3000 pnpm --filter @tierra-austral/engine test fuzz
+```
+
+### Cambios al SPEC en M3
+
+- **§5.2**: la fase `discard` suma `source` y `returnTo`.
+- **§6**: `legal.ts` suma `legalStealTargets` y se aclara que el descarte no se enumera; se agrega
+  la regla de validación de cantidades (`INVALID_AMOUNT`).
+- **§12.7**: robo siempre explícito, candidatos congelados al mover el ladrón, el descarte como
+  única fase simultánea, y adónde van las cartas (descarte al banco, robo de mano a mano).
+- **§12.11**: el paso 8 queda escrito con el algoritmo exacto de expansión de la mano.
+
+### Deuda técnica anotada
+
+- **M5 — sacar `NOT_IMPLEMENTED`** (sigue vigente, ver abajo).
 
 ---
 
