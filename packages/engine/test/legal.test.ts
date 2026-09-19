@@ -3,7 +3,9 @@ import {
   COSTS,
   legalCitySpots,
   legalRoadSpots,
+  legalRobberHexes,
   legalSettlementSpots,
+  legalStealTargets,
   validateAction,
   type PlayerId,
   type ReadonlyGameState,
@@ -41,6 +43,18 @@ export const expectLegalMatchesValidate = (state: ReadonlyGameState, playerId: P
     const accepted = validateAction(state, playerId, { type: 'placeRoad', edge }) === null;
     expect(roads.has(edge)).toBe(accepted);
   }
+
+  const hexes = new Set(legalRobberHexes(state, playerId));
+  for (const hex of board.hexIds) {
+    const accepted = validateAction(state, playerId, { type: 'moveRobber', hex }) === null;
+    expect(hexes.has(hex)).toBe(accepted);
+  }
+
+  const targets = new Set(legalStealTargets(state, playerId));
+  for (const player of state.players) {
+    const accepted = validateAction(state, playerId, { type: 'steal', target: player.id }) === null;
+    expect(targets.has(player.id)).toBe(accepted);
+  }
 };
 
 const firstEdge = at(board.edgeIds, 10);
@@ -72,6 +86,17 @@ const positions: Record<string, ReadonlyGameState> = {
     s.buildings[at(firstEdgeVertices, 1)] = { owner: BRUNO.id, type: 'settlement' };
     s.roads[firstEdge] = ANA.id;
     give(s, ANA.id, { wood: 5, brick: 5, sheep: 5, wheat: 5, ore: 5 });
+  }),
+
+  'moving the robber': draft(game, (s) => {
+    s.currentPlayer = ANA.id;
+    s.phase = { kind: 'moveRobber', source: 'seven', returnTo: 'main' };
+  }),
+
+  'choosing a victim': draft(game, (s) => {
+    s.currentPlayer = ANA.id;
+    s.phase = { kind: 'steal', candidates: [BRUNO.id], returnTo: 'main' };
+    give(s, BRUNO.id, { wood: 1 });
   }),
 
   'main phase, out of pieces': draft(game, (s) => {

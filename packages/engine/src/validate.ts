@@ -1,4 +1,4 @@
-import { COSTS } from './constants.js';
+import { COSTS, RESOURCES } from './constants.js';
 import {
   canAfford,
   edgeOf,
@@ -8,7 +8,16 @@ import {
   settlementConnects,
   vertexOf,
 } from './rules/placement.js';
-import type { Action, EdgeId, ErrorCode, PlayerId, ReadonlyGameState, VertexId } from './types.js';
+import type {
+  Action,
+  EdgeId,
+  ErrorCode,
+  HexId,
+  PlayerId,
+  ReadonlyGameState,
+  ResourceBundle,
+  VertexId,
+} from './types.js';
 
 /**
  * The single statement of "is this move legal?".
@@ -20,9 +29,6 @@ import type { Action, EdgeId, ErrorCode, PlayerId, ReadonlyGameState, VertexId }
 
 /** Actions whose milestone has not landed yet. They exist in the union already (SPEC.md §5.3). */
 const NOT_YET_IMPLEMENTED = new Set([
-  'discard',
-  'moveRobber',
-  'steal',
   'buyDevCard',
   'playKnight',
   'playRoadBuilding',
@@ -113,6 +119,60 @@ const validateCity = (
   return null;
 };
 
+/**
+ * Every amount arriving in an action has to be a non-negative integer.
+ *
+ * In M6 actions come off the wire, where the types do not exist: NaN, 1.5 and
+ * -1 are all things a client can send, and validate is the last line of
+ * defence before the numbers reach the bank.
+ */
+const validAmounts = (amounts: Partial<ResourceBundle>): boolean =>
+  RESOURCES.every((resource) => {
+    const amount = amounts[resource];
+    if (amount === undefined) return true;
+    return Number.isInteger(amount) && amount >= 0;
+  });
+
+const validateDiscard = (
+  state: ReadonlyGameState,
+  playerId: PlayerId,
+  cards: Partial<ResourceBundle>,
+): ErrorCode | null => {
+  const phase = state.phase;
+  if (phase.kind !== 'discard') return 'WRONG_PHASE';
+
+  // Anyone still owing cards may act, whoever's turn it is (SPEC.md §4.8).
+  const owed = phase.pending[playerId];
+  if (owed === undefined) return 'NOT_YOUR_TURN';
+
+  if (!validAmounts(cards)) return 'INVALID_AMOUNT';
+
+  const player = playerOf(state, playerId);
+  if (!player) return 'INVALID_TARGET';
+
+  let total = 0;
+  for (const resource of RESOURCES) {
+    const amount = cards[resource] ?? 0;
+    if (amount > player.resources[resource]) return 'INSUFFICIENT_RESOURCES';
+    total += amount;
+  }
+  // One discard, for exactly what is owed: no partial discards (SPEC.md §4.8).
+  return total === owed ? null : 'INVALID_DISCARD';
+};
+
+const validateMoveRobber = (state: ReadonlyGameState, hex: HexId): ErrorCode | null => {
+  if (state.phase.kind !== 'moveRobber') return 'WRONG_PHASE';
+  if (!state.board.hexes[hex]) return 'INVALID_TARGET';
+  // It has to move somewhere else; the desert is fair game (SPEC.md §4.8).
+  return hex === state.robberHex ? 'INVALID_TARGET' : null;
+};
+
+const validateSteal = (state: ReadonlyGameState, target: PlayerId): ErrorCode | null => {
+  const phase = state.phase;
+  if (phase.kind !== 'steal') return 'WRONG_PHASE';
+  return phase.candidates.includes(target) ? null : 'INVALID_TARGET';
+};
+
 export const validateAction = (
   state: ReadonlyGameState,
   playerId: PlayerId,
@@ -122,8 +182,9 @@ export const validateAction = (
   if (!playerOf(state, playerId)) return 'INVALID_TARGET';
   if (NOT_YET_IMPLEMENTED.has(action.type)) return 'NOT_IMPLEMENTED';
 
-  // Every action M2 implements belongs to the active player. Simultaneous
-  // actions arrive in M3 with the discard phase.
+  // Who may act depends on the action, not only on whose turn it is: the
+  // discard is simultaneous and belongs to everyone who owes cards.
+  if (action.type === 'discard') return validateDiscard(state, playerId, action.cards);
   if (state.currentPlayer !== playerId) return 'NOT_YOUR_TURN';
 
   switch (action.type) {
@@ -135,6 +196,10 @@ export const validateAction = (
       return validateCity(state, playerId, action.vertex);
     case 'rollDice':
       return state.phase.kind === 'preRoll' ? null : 'WRONG_PHASE';
+    case 'moveRobber':
+      return validateMoveRobber(state, action.hex);
+    case 'steal':
+      return validateSteal(state, action.target);
     case 'endTurn':
       return state.phase.kind === 'main' ? null : 'WRONG_PHASE';
     default:

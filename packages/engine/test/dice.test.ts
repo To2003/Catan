@@ -45,9 +45,25 @@ const resourceOf = (state: ReadonlyGameState, hex: HexId): Resource | null => {
   return terrain ? TERRAIN_RESOURCE[terrain] : null;
 };
 
+/** A state whose next roll is `total`, found by walking PRNG states. */
+const stateRollingTotal = (
+  base: (mutate: Parameters<typeof draft>[1]) => ReadonlyGameState,
+  total: number,
+  mutate: Parameters<typeof draft>[1] = () => {},
+): ReadonlyGameState => {
+  for (let seed = 0; seed < 5000; seed += 1) {
+    const candidate = base((s) => {
+      s.rngState = seed;
+      mutate(s);
+    });
+    if (peekRoll(candidate).total === total) return candidate;
+  }
+  throw new Error(`no rng state rolling ${total} was found`);
+};
+
 describe('rolling the dice', () => {
   it('draws d1 then d2 from the seeded PRNG and records the roll', () => {
-    const before = barePreRoll();
+    const before = stateRollingTotal(barePreRoll, 6);
     const expected = peekRoll(before);
     const { state, events } = applyOrThrow(before, ANA.id, { type: 'rollDice' });
 
@@ -62,7 +78,7 @@ describe('rolling the dice', () => {
   });
 
   it('is deterministic: the same state rolls the same numbers', () => {
-    const before = barePreRoll();
+    const before = stateRollingTotal(barePreRoll, 6);
     const once = applyOrThrow(before, ANA.id, { type: 'rollDice' }).state;
     const twice = applyOrThrow(before, ANA.id, { type: 'rollDice' }).state;
     expect(once.lastRoll).toEqual(twice.lastRoll);
@@ -70,7 +86,7 @@ describe('rolling the dice', () => {
   });
 
   it('cannot be rolled twice in a turn', () => {
-    const { state } = applyOrThrow(barePreRoll(), ANA.id, { type: 'rollDice' });
+    const { state } = applyOrThrow(stateRollingTotal(barePreRoll, 6), ANA.id, { type: 'rollDice' });
     expect(applyAction(state, ANA.id, { type: 'rollDice' })).toEqual({
       ok: false,
       error: 'WRONG_PHASE',
@@ -79,20 +95,10 @@ describe('rolling the dice', () => {
 });
 
 describe('production', () => {
-  /** A state whose next roll is `total`, found by walking seeds. */
   const stateRolling = (
     total: number,
     mutate: Parameters<typeof draft>[1] = () => {},
-  ): ReadonlyGameState => {
-    for (let seed = 0; seed < 5000; seed += 1) {
-      const candidate = barePreRoll((s) => {
-        s.rngState = seed;
-        mutate(s);
-      });
-      if (peekRoll(candidate).total === total) return candidate;
-    }
-    throw new Error(`no rng state rolling ${total} was found`);
-  };
+  ): ReadonlyGameState => stateRollingTotal(barePreRoll, total, mutate);
 
   it('pays 1 to a settlement and 2 to a city on each producing hex', () => {
     const total = 5;
@@ -143,7 +149,7 @@ describe('production', () => {
     if (resource) expect(ana?.resources[resource]).toBe(0);
   });
 
-  it('produces nothing on a 7 and moves on to main (placeholder until M3)', () => {
+  it('produces nothing on a 7 and starts the robber chain instead', () => {
     // A handful of settlements spread over the board, so there is plenty that
     // could have produced — but not enough points to end the game.
     const before = stateRolling(7, (s) => {
@@ -154,8 +160,10 @@ describe('production', () => {
     });
 
     const { state, events } = applyOrThrow(before, ANA.id, { type: 'rollDice' });
+    // Nobody holds a card here, so there is nothing to discard: straight to the
+    // robber.
     expect(events.map((event) => event.type)).toEqual(['DiceRolled', 'PhaseChanged']);
-    expect(state.phase).toEqual({ kind: 'main' });
+    expect(state.phase).toEqual({ kind: 'moveRobber', source: 'seven', returnTo: 'main' });
     for (const player of state.players) {
       for (const resource of RESOURCES) expect(player.resources[resource]).toBe(0);
     }

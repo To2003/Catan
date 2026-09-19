@@ -2,6 +2,7 @@ import type { GameEvent } from '../events.js';
 import { rollDie } from '../rng.js';
 import type { GameState, HexId, PlayerId } from '../types.js';
 import { claimsFromHexes, payClaims } from './production.js';
+import { beginSeven } from './robber.js';
 
 /**
  * The roll and what it pays out (SPEC.md §4.6, §4.7).
@@ -19,11 +20,10 @@ export const rollDice = (draft: GameState, playerId: PlayerId, events: GameEvent
   const total = first.value + second.value;
   events.push({ type: 'DiceRolled', player: playerId, dice: [first.value, second.value], total });
 
+  // A seven produces nothing: it discards, moves the robber and steals
+  // (SPEC.md §4.8).
   if (total === 7) {
-    // TODO(M3): a 7 forces discards, moves the robber and steals (SPEC.md §4.8).
-    // Until that milestone it produces nothing and the turn carries on.
-    draft.phase = { kind: 'main' };
-    events.push({ type: 'PhaseChanged', phase: draft.phase });
+    beginSeven(draft, events);
     return;
   }
 

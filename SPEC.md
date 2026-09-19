@@ -293,7 +293,12 @@ type Phase =
   | { kind: 'lobby' }
   | { kind: 'setup'; round: 1 | 2; step: 'settlement' | 'road'; lastSettlement?: VertexId }
   | { kind: 'preRoll' }
-  | { kind: 'discard'; pending: Record<PlayerId, number> }
+  | {
+      kind: 'discard';
+      pending: Record<PlayerId, number>;
+      source: 'seven'; // solo un 7 llega al descarte; el caballero no
+      returnTo: 'main';
+    }
   | { kind: 'moveRobber'; source: 'seven' | 'knight'; returnTo: 'preRoll' | 'main' }
   | { kind: 'steal'; candidates: PlayerId[]; returnTo: 'preRoll' | 'main' }
   | { kind: 'main' }
@@ -383,7 +388,8 @@ type Action =
 - La API central es `applyAction(state, playerId, action): { ok: true; state; events } | { ok: false; error: ErrorCode }`.
 - Es una función **pura**: no usa `Math.random`, no hace I/O y no depende de la fecha. Toda la aleatoriedad (dados, mazo, robos y tablero) sale del PRNG con semilla guardado en el estado.
 - `validate.ts` rechaza toda acción ilegal con un código de error tipado, por ejemplo `NOT_YOUR_TURN`, `WRONG_PHASE`, `INSUFFICIENT_RESOURCES`, `DISTANCE_RULE` o `NOT_CONNECTED`.
-- `legal.ts` expone helpers para la UI: `legalSettlementSpots`, `legalRoadSpots`, `legalCitySpots`, `legalRobberHexes` y `availableMaritimeRates`.
+- `legal.ts` expone helpers para la UI: `legalSettlementSpots`, `legalRoadSpots`, `legalCitySpots`, `legalRobberHexes`, `legalStealTargets` y `availableMaritimeRates`. **El descarte no se enumera**: es una combinación de cartas, no una posición, así que el espacio es combinatorio. Para `discard` alcanza con `validate`.
+- **Toda cantidad de recursos que llega en una acción** (`discard`, y el comercio desde M4) se valida como **entero no negativo**: `NaN`, decimales y negativos se rechazan con `INVALID_AMOUNT`. En M6 las acciones llegan por red, donde los tipos de TypeScript no existen: `validate` es la última línea de defensa.
 - `view.ts` implementa `getPlayerView(state, playerId)`, que:
   - muestra tus recursos y tus cartas de desarrollo en detalle;
   - de los demás jugadores muestra solo cuántas cartas de recursos y cuántas de desarrollo tienen;
@@ -573,6 +579,10 @@ Los PV se chequean **después de cada acción del jugador activo** y también **
 
 Si hay **al menos 1 candidato** válido, el robo es **obligatorio**: la fase `steal` no se puede saltear. Si no hay candidatos, no se roba y el turno sigue.
 
+El robo es **siempre una acción explícita**, incluso con un solo candidato: el motor no lo resuelve solo. La UI puede preseleccionar al único candidato, pero la acción igual viaja. Los candidatos se calculan **al mover el ladrón** y quedan guardados en la fase `steal`; entre `moveRobber` y `steal` no hay ninguna otra acción legal, así que no pueden quedar desactualizados.
+
+El descarte es la **única fase simultánea**: actúan todos los que deben cartas, sin importar de quién sea el turno. Cada uno descarta **exactamente** `floor(n/2)` en **un solo** `discard`; no hay descartes parciales. Las cartas descartadas **vuelven al banco**. El robo, en cambio, pasa **de mano a mano** y no toca el banco.
+
 ### 12.8 Construcción de caminos (aclara §4.10)
 
 - Se colocan los caminos que se puedan (por stock o por falta de aristas legales) y la carta **se consume igual**.
@@ -614,6 +624,6 @@ El orden es **parte del contrato**: de él dependen el test de snapshot del tabl
 **Durante la partida:**
 
 7. **Dados** — por cada `rollDice`, dos `rollDie`: primero d1, después d2.
-8. **Robo del ladrón** (M3) — una extracción sobre la mano de la víctima.
+8. **Robo del ladrón** — se expande la mano de la víctima en el orden fijo `wood, brick, sheep, wheat, ore`, una entrada por carta, y **una** extracción `nextInt(mano.length)` elige cuál. El orden de expansión es contrato: si cambia, cambian todos los robos de todas las semillas.
 
 Si ese orden cambia, cambian todos los tableros y todas las partidas de todas las semillas, y el snapshot se rompe a propósito. Se actualiza de forma consciente, nunca regrabándolo a ciegas.

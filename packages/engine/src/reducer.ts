@@ -1,6 +1,7 @@
 import type { GameEvent } from './events.js';
 import { buildRoad, buildSettlement, upgradeToCity } from './rules/build.js';
 import { rollDice } from './rules/dice.js';
+import { discard, moveRobber, steal } from './rules/robber.js';
 import { endTurn } from './rules/turn.js';
 import { checkVictory } from './rules/victory.js';
 import { placeSetupRoad, placeSetupSettlement } from './rules/setup.js';
@@ -63,6 +64,18 @@ export const applyAction = (
       rollDice(draft, playerId, events);
       break;
 
+    case 'discard':
+      discard(draft, playerId, action.cards, events);
+      break;
+
+    case 'moveRobber':
+      moveRobber(draft, playerId, action.hex, events);
+      break;
+
+    case 'steal':
+      steal(draft, playerId, action.target, events);
+      break;
+
     case 'endTurn':
       endTurn(draft, playerId, events);
       break;
@@ -71,9 +84,10 @@ export const applyAction = (
       return { ok: false, error: 'NOT_IMPLEMENTED' };
   }
 
-  // Victory is checked after every action of the active player (SPEC.md §12.4);
-  // the start-of-turn check lives in endTurn.
-  checkVictory(draft, playerId, events);
+  // Victory is checked after every action of the *active* player (SPEC.md
+  // §12.4). A discard by anyone else cannot win a game, and should not be
+  // mistaken for their own turn.
+  if (playerId === draft.currentPlayer) checkVictory(draft, playerId, events);
 
   draft.version += 1;
   return { ok: true, state: draft, events };
