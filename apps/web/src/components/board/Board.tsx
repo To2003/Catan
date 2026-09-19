@@ -21,8 +21,10 @@ export interface BoardInteraction {
   readonly colorOf: (playerId: PlayerId) => string;
   readonly legalVertices: readonly VertexId[];
   readonly legalEdges: readonly EdgeId[];
+  readonly legalHexes: readonly HexId[];
   readonly onVertex: (vertex: VertexId) => void;
   readonly onEdge: (edge: EdgeId) => void;
+  readonly onHex: (hex: HexId) => void;
 }
 
 interface BoardProps {
@@ -85,8 +87,10 @@ export function Board({ board, robberHex, debug, interaction }: BoardProps) {
           board={board}
           vertices={interaction.legalVertices}
           edges={interaction.legalEdges}
+          hexes={interaction.legalHexes}
           onVertex={interaction.onVertex}
           onEdge={interaction.onEdge}
+          onHex={interaction.onHex}
         />
       ) : null}
       {debug ? <DebugOverlay board={board} /> : null}

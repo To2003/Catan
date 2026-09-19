@@ -1,20 +1,49 @@
-import type { BoardGraph, EdgeId, VertexId } from '@tierra-austral/engine';
+import type { BoardGraph, EdgeId, HexId, VertexId } from '@tierra-austral/engine';
 
 interface TargetsProps {
   readonly board: BoardGraph;
   readonly vertices: readonly VertexId[];
   readonly edges: readonly EdgeId[];
+  readonly hexes: readonly HexId[];
   readonly onVertex: (vertex: VertexId) => void;
   readonly onEdge: (edge: EdgeId) => void;
+  readonly onHex: (hex: HexId) => void;
 }
 
 /**
  * The legal spots, highlighted and clickable. Which spots those are is the
  * engine's answer (`legal.ts`): this only draws them.
  */
-export function Targets({ board, vertices, edges, onVertex, onEdge }: TargetsProps) {
+export function Targets({ board, vertices, edges, hexes, onVertex, onEdge, onHex }: TargetsProps) {
   return (
     <g>
+      {hexes.map((id) => {
+        const hex = board.hexes[id];
+        if (!hex) return null;
+        const points = hex.corners
+          .map((corner) => board.vertices[corner])
+          .filter((corner) => corner !== undefined)
+          .map((corner) => `${corner.x},${corner.y}`)
+          .join(' ');
+        return (
+          <polygon
+            key={id}
+            points={points}
+            fill="#12100e"
+            fillOpacity={0.45}
+            stroke="#ffffff"
+            strokeWidth={0.05}
+            strokeDasharray="0.15 0.1"
+            className="cursor-pointer hover:fill-black"
+            onClick={() => {
+              onHex(id);
+            }}
+          >
+            <title>{id}</title>
+          </polygon>
+        );
+      })}
+
       {edges.map((id) => {
         const edge = board.edges[id];
         const a = edge && board.vertices[edge.vertices[0]];

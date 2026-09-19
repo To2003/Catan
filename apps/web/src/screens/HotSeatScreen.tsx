@@ -3,20 +3,26 @@ import {
   RESOURCES,
   applyAction,
   createGame,
+  isVisibleTo,
   legalCitySpots,
   legalRoadSpots,
+  legalRobberHexes,
   legalSettlementSpots,
+  legalStealTargets,
   victoryPoints,
   type Action,
   type EdgeId,
   type ErrorCode,
   type GameEvent,
+  type HexId,
   type PlayerId,
   type PlayerSeat,
   type ReadonlyGameState,
+  type ResourceBundle,
   type VertexId,
 } from '@tierra-austral/engine';
 import { Board } from '../components/board/Board.js';
+import { DiscardModal } from '../components/DiscardModal.js';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
 import { eventText } from '../lib/eventText.js';
 import { RESOURCE_LABELS } from '../lib/terrainStyles.js';
@@ -51,6 +57,8 @@ const ERROR_TEXT: Partial<Record<ErrorCode, string>> = {
   NOT_OWNER: 'No es tuyo',
   ALREADY_CITY: 'Ya es una ciudad',
   GAME_OVER: 'La partida terminó',
+  INVALID_AMOUNT: 'Cantidad inválida',
+  INVALID_DISCARD: 'Tenés que descartar la cantidad exacta',
   NOT_IMPLEMENTED: 'Todavía no está implementado',
 };
 
@@ -61,6 +69,12 @@ const phaseText = (state: ReadonlyGameState): string => {
       return `Setup, ronda ${phase.round}: ${phase.step === 'settlement' ? 'asentamiento' : 'camino'}`;
     case 'preRoll':
       return 'Antes de tirar';
+    case 'discard':
+      return `Descarte: faltan ${Object.keys(phase.pending).length}`;
+    case 'moveRobber':
+      return 'Mover el ladrón';
+    case 'steal':
+      return 'Elegir a quién robarle';
     case 'main':
       return 'Turno principal';
     case 'gameOver':
@@ -95,8 +109,8 @@ export function HotSeatScreen() {
   const active = game.currentPlayer;
 
   const send = useCallback(
-    (action: Action) => {
-      const result = applyAction(game, active, action);
+    (action: Action, as: PlayerId = active) => {
+      const result = applyAction(game, as, action);
       if (!result.ok) {
         setError(ERROR_TEXT[result.error] ?? result.error);
         return;
@@ -120,6 +134,18 @@ export function HotSeatScreen() {
   const settlements = useMemo(() => legalSettlementSpots(game, active), [game, active]);
   const cities = useMemo(() => legalCitySpots(game, active), [game, active]);
   const roads = useMemo(() => legalRoadSpots(game, active), [game, active]);
+  const robberHexes = useMemo(() => legalRobberHexes(game, active), [game, active]);
+  const stealTargets = useMemo(() => legalStealTargets(game, active), [game, active]);
+
+  // Whoever owes cards goes first, one at a time: enough for a local game.
+  const discarding = useMemo(() => {
+    if (game.phase.kind !== 'discard') return undefined;
+    const [playerId] = Object.keys(game.phase.pending);
+    if (playerId === undefined) return undefined;
+    const player = game.players.find((candidate) => candidate.id === playerId);
+    const owed = game.phase.pending[playerId];
+    return player && owed !== undefined ? { player, owed } : undefined;
+  }, [game]);
 
   const onVertex = useCallback(
     (vertex: VertexId) => {
@@ -136,6 +162,20 @@ export function HotSeatScreen() {
       send({ type: 'placeRoad', edge });
     },
     [send],
+  );
+
+  const onHex = useCallback(
+    (hex: HexId) => {
+      send({ type: 'moveRobber', hex });
+    },
+    [send],
+  );
+
+  const onDiscard = useCallback(
+    (cards: Partial<ResourceBundle>) => {
+      if (discarding) send({ type: 'discard', cards }, discarding.player.id);
+    },
+    [discarding, send],
   );
 
   const activePlayer = game.players.find((player) => player.id === active);
@@ -200,7 +240,10 @@ export function HotSeatScreen() {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
+        {discarding ? (
+          <DiscardModal player={discarding.player} owed={discarding.owed} onConfirm={onDiscard} />
+        ) : null}
         <section className="min-h-0 flex-1 p-2">
           <Board
             board={game.board}
@@ -212,8 +255,10 @@ export function HotSeatScreen() {
               colorOf,
               legalVertices: [...new Set([...settlements, ...cities])],
               legalEdges: roads,
+              legalHexes: robberHexes,
               onVertex,
               onEdge,
+              onHex,
             }}
           />
         </section>
@@ -248,6 +293,37 @@ export function HotSeatScreen() {
               })}
             </ul>
           </div>
+
+          {stealTargets.length > 0 ? (
+            <div>
+              <h2 className="mb-1 text-xs font-bold tracking-widest text-stone-400 uppercase">
+                Robarle a
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {stealTargets.map((target) => {
+                  const victim = game.players.find((candidate) => candidate.id === target);
+                  const cards = victim
+                    ? RESOURCES.reduce((sum, resource) => sum + victim.resources[resource], 0)
+                    : 0;
+                  return (
+                    <button
+                      key={target}
+                      type="button"
+                      // Even with a single candidate the action is explicit: the
+                      // engine never resolves a steal on its own (SPEC §12.7).
+                      autoFocus={stealTargets.length === 1}
+                      onClick={() => {
+                        send({ type: 'steal', target });
+                      }}
+                      className="rounded bg-stone-100 px-2 py-1 text-xs font-semibold text-stone-900"
+                    >
+                      {victim?.name ?? target} ({cards})
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
 
           <div>
             <h2 className="mb-1 text-xs font-bold tracking-widest text-stone-400 uppercase">
@@ -287,6 +363,10 @@ export function HotSeatScreen() {
             </h2>
             <ol className="space-y-0.5 font-mono text-[11px] text-stone-300">
               {[...log]
+                // Nothing is hidden in hot-seat, but the log goes through the
+                // same audience check the server will use in M6, so the filter
+                // is exercised from day one.
+                .filter((event) => isVisibleTo(event, active))
                 .slice(-60)
                 .reverse()
                 .map((event, index) => (
