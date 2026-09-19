@@ -108,3 +108,35 @@ describe('surviving a restart', () => {
     expect(back.playerId).toBe(host.playerId);
   });
 });
+
+describe('rematch', () => {
+  let harness: Harness;
+
+  beforeEach(async () => {
+    harness = await startHarness();
+  });
+
+  afterEach(async () => {
+    await harness.close();
+  });
+
+  it('is refused while the game is still going', async () => {
+    const { host, second, third } = await seatThree(harness);
+    host.socket.emit('room:start');
+    await until(() => [host, second, third].every((client) => client.view !== undefined), 'views');
+
+    host.socket.emit('room:rematch');
+    await until(() => host.errors.length > 0, 'the refusal');
+    expect(host.errors.map((error) => error.code)).toContain('GAME_NOT_OVER');
+  });
+
+  it('is only the host to call', async () => {
+    const { host, second, third } = await seatThree(harness);
+    host.socket.emit('room:start');
+    await until(() => [host, second, third].every((client) => client.view !== undefined), 'views');
+
+    second.socket.emit('room:rematch');
+    await until(() => second.errors.length > 0, 'the refusal');
+    expect(second.errors.map((error) => error.code)).toContain('NOT_HOST');
+  });
+});
