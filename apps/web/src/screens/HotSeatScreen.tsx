@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   RESOURCES,
   applyAction,
+  availableMaritimeRates,
   createGame,
   isVisibleTo,
   legalCitySpots,
@@ -18,11 +19,13 @@ import {
   type PlayerId,
   type PlayerSeat,
   type ReadonlyGameState,
+  type Resource,
   type ResourceBundle,
   type VertexId,
 } from '@tierra-austral/engine';
 import { Board } from '../components/board/Board.js';
 import { DiscardModal } from '../components/DiscardModal.js';
+import { TradePanel } from '../components/TradePanel.js';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
 import { eventText } from '../lib/eventText.js';
 import { RESOURCE_LABELS } from '../lib/terrainStyles.js';
@@ -135,6 +138,7 @@ export function HotSeatScreen() {
   const cities = useMemo(() => legalCitySpots(game, active), [game, active]);
   const roads = useMemo(() => legalRoadSpots(game, active), [game, active]);
   const robberHexes = useMemo(() => legalRobberHexes(game, active), [game, active]);
+  const rates = useMemo(() => availableMaritimeRates(game, active), [game, active]);
   const stealTargets = useMemo(() => legalStealTargets(game, active), [game, active]);
 
   // Whoever owes cards goes first, one at a time: enough for a local game.
@@ -167,6 +171,13 @@ export function HotSeatScreen() {
   const onHex = useCallback(
     (hex: HexId) => {
       send({ type: 'moveRobber', hex });
+    },
+    [send],
+  );
+
+  const onTrade = useCallback(
+    (give: Resource, want: Resource) => {
+      send({ type: 'maritimeTrade', give, want });
     },
     [send],
   );
@@ -343,6 +354,14 @@ export function HotSeatScreen() {
               {activePlayer?.stock.cities ?? 0} ciudades
             </p>
           </div>
+
+          <TradePanel
+            rates={rates}
+            hand={activePlayer?.resources ?? { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 0 }}
+            bank={game.bank}
+            enabled={game.phase.kind === 'main'}
+            onTrade={onTrade}
+          />
 
           <div>
             <h2 className="mb-1 text-xs font-bold tracking-widest text-stone-400 uppercase">
