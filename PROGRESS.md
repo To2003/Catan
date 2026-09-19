@@ -208,11 +208,12 @@ simultáneo.
 
 ### Deuda técnica anotada
 
-- **M5 — sacar `NOT_IMPLEMENTED`.** Mientras el union `Action` esté completo pero falten
-  hitos, `validate.ts` rechaza con `NOT_IMPLEMENTED` las acciones cuyo handler todavía no
-  existe. Al cerrar M5 hay que agregar un test que verifique que **ninguna** acción devuelve
-  ese código, y recién después eliminarlo de `ErrorCode`. Si el código sobrevive al hito, es
-  que quedó un handler sin escribir.
+- **M7 — sacar `NOT_IMPLEMENTED`** (movido de M5). El union `Action` está completo desde M2,
+  así que `validate.ts` rechaza con `NOT_IMPLEMENTED` las acciones cuyo handler todavía no
+  existe. En M5 **no se podía borrar**: las cinco acciones de comercio entre jugadores son de
+  M7. En su lugar hay un test (`notImplemented.test.ts`) que fija la lista exacta de lo que
+  falta y falla en los dos sentidos. Al cerrar M7 esa lista queda vacía y recién ahí se
+  elimina el código de `ErrorCode`.
 - ~~**M3 — el 7.**~~ Resuelto en M3: `rules/dice.ts` ya encadena
   `discard → moveRobber → steal`.
 
