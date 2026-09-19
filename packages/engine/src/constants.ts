@@ -86,6 +86,15 @@ export const DEV_DECK_COMPOSITION = {
 
 export const DEV_DECK_SIZE = 25;
 
+/** The card types, in a fixed order for anything that iterates them. */
+export const DEV_CARDS = [
+  'knight',
+  'vp',
+  'roadBuilding',
+  'yearOfPlenty',
+  'monopoly',
+] as const satisfies readonly DevCard[];
+
 /** Victory points awarded by each source (SPEC.md §4.12). */
 export const VICTORY_POINTS = {
   settlement: 1,

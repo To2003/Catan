@@ -1,6 +1,16 @@
-import { RESOURCES } from './constants.js';
-import { isLegalAction } from './validate.js';
-import type { EdgeId, HexId, PlayerId, ReadonlyGameState, Resource, VertexId } from './types.js';
+import { DEV_CARDS, RESOURCES } from './constants.js';
+import { isLegalAction, validateAction } from './validate.js';
+import type {
+  Action,
+  DevCard,
+  EdgeId,
+  ErrorCode,
+  HexId,
+  PlayerId,
+  ReadonlyGameState,
+  Resource,
+  VertexId,
+} from './types.js';
 
 /**
  * Legal moves, for highlighting them in the UI.
@@ -67,3 +77,83 @@ export const legalMaritimeTrades = (
       isLegalAction(state, playerId, { type: 'maritimeTrade', give, want }),
     ).map((want) => ({ give, want })),
   );
+
+/** Why a development card cannot be played, straight from the rules. */
+export interface DevCardOption {
+  readonly playable: boolean;
+  /** The engine's own code, for the UI to translate. Absent when playable. */
+  readonly reason?: ErrorCode;
+}
+
+/**
+ * Everything a player could do right now, in one object.
+ *
+ * It exists because over the network the client no longer holds the state and
+ * cannot ask `legal.ts` itself. Rather than teach the client the rules, the
+ * server computes this and ships it inside the view; the hot-seat computes the
+ * same thing locally. One statement of the rules, two callers.
+ */
+export interface LegalMoves {
+  readonly settlements: readonly VertexId[];
+  readonly roads: readonly EdgeId[];
+  readonly cities: readonly VertexId[];
+  readonly robberHexes: readonly HexId[];
+  readonly stealTargets: readonly PlayerId[];
+  readonly maritimeTrades: readonly { give: Resource; want: Resource }[];
+  /**
+   * Playability per card type. Deliberately *not* called `devCards`: that name
+   * belongs to a hand, and the view's leak test reads keys, not intentions.
+   */
+  readonly devCardOptions: Readonly<Record<DevCard, DevCardOption>>;
+  readonly canBuyDevCard: boolean;
+  readonly canRoll: boolean;
+  readonly canEndTurn: boolean;
+  /** How many cards this player owes right now, if any (SPEC.md §4.8). */
+  readonly discardOwed?: number;
+}
+
+/** The action each card is played with. Victory cards have none: they are never played. */
+const PLAY_ACTION: Record<DevCard, Action | undefined> = {
+  knight: { type: 'playKnight' },
+  roadBuilding: { type: 'playRoadBuilding' },
+  // The real resources are chosen by the player; any valid pair answers
+  // "could this be played at all?".
+  yearOfPlenty: { type: 'playYearOfPlenty', resources: ['wood', 'wood'] },
+  monopoly: { type: 'playMonopoly', resource: 'wood' },
+  vp: undefined,
+};
+
+const devCardOptions = (
+  state: ReadonlyGameState,
+  playerId: PlayerId,
+): Record<DevCard, DevCardOption> => {
+  const options = {} as Record<DevCard, DevCardOption>;
+  for (const card of DEV_CARDS) {
+    const action = PLAY_ACTION[card];
+    if (!action) {
+      options[card] = { playable: false };
+      continue;
+    }
+    const error = validateAction(state, playerId, action);
+    options[card] = error === null ? { playable: true } : { playable: false, reason: error };
+  }
+  return options;
+};
+
+export const legalMoves = (state: ReadonlyGameState, playerId: PlayerId): LegalMoves => {
+  const owed = state.phase.kind === 'discard' ? state.phase.pending[playerId] : undefined;
+
+  return {
+    settlements: legalSettlementSpots(state, playerId),
+    roads: legalRoadSpots(state, playerId),
+    cities: legalCitySpots(state, playerId),
+    robberHexes: legalRobberHexes(state, playerId),
+    stealTargets: legalStealTargets(state, playerId),
+    maritimeTrades: legalMaritimeTrades(state, playerId),
+    devCardOptions: devCardOptions(state, playerId),
+    canBuyDevCard: isLegalAction(state, playerId, { type: 'buyDevCard' }),
+    canRoll: canRollDice(state, playerId),
+    canEndTurn: canEndTurn(state, playerId),
+    ...(owed === undefined ? {} : { discardOwed: owed }),
+  };
+};

@@ -13,3 +13,4 @@ export * from './rules/trade.js';
 export * from './rules/devCards.js';
 export * from './rules/largestArmy.js';
 export * from './rules/longestRoad.js';
+export * from './view.js';
