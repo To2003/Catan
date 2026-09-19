@@ -11,3 +11,5 @@ coverage/
 *.sqlite
 *.sqlite-journal
 .vite/
+build/
+data/

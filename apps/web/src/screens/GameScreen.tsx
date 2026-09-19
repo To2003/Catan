@@ -16,7 +16,10 @@ import { DiscardModal } from '../components/DiscardModal.js';
 import { ResourceChoiceModal } from '../components/ResourceChoiceModal.js';
 import { OfferPanel } from '../components/OfferPanel.js';
 import { TradePanel } from '../components/TradePanel.js';
+import { Chat } from '../components/Chat.js';
+import { DiceRoll } from '../components/DiceRoll.js';
 import { eventText } from '../lib/eventText.js';
+import { isMuted, setMuted } from '../lib/sounds.js';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
 import { RESOURCE_LABELS } from '../lib/terrainStyles.js';
 import { useGame } from '../store/gameStore.js';
@@ -35,6 +38,9 @@ export function GameScreen() {
   const error = useGame((state) => state.error);
   const send = useGame((state) => state.send);
   const forceTurn = useGame((state) => state.forceTurn);
+  const chat = useGame((state) => state.chat);
+  const sendChat = useGame((state) => state.sendChat);
+  const [muted, setMutedState] = useState(isMuted);
 
   const [choosing, setChoosing] = useState<'yearOfPlenty' | 'monopoly' | null>(null);
 
@@ -120,6 +126,18 @@ export function GameScreen() {
 
   if (!view) return null;
 
+  // How many rolls have been seen, so the dice replay their tumble each time.
+  const rolls = events.filter((event) => event.type === 'DiceRolled').length;
+  // What the last production gave this player, to flash the counters.
+  const lastGain = [...events]
+    .reverse()
+    .find((event) => event.type === 'ResourcesProduced' || event.type === 'SetupResourcesGranted');
+  const gained = new Set(
+    lastGain?.type === 'ResourcesProduced' || lastGain?.type === 'SetupResourcesGranted'
+      ? lastGain.grants.filter((grant) => grant.player === view.you).map((grant) => grant.resource)
+      : [],
+  );
+
   const isMyTurn = view.currentPlayer === view.you;
   const owed = view.legalMoves.discardOwed;
   const blocked = room?.blockedBy;
@@ -156,11 +174,7 @@ export function GameScreen() {
         <span className="rounded bg-stone-800 px-2 py-1 text-xs">
           {isMyTurn ? 'Es tu turno' : `Juega ${nameOf(view.currentPlayer)}`}
         </span>
-        {view.lastRoll ? (
-          <span className="rounded bg-stone-800 px-2 py-1 text-xs">
-            dados {view.lastRoll[0]} + {view.lastRoll[1]} = {view.lastRoll[0] + view.lastRoll[1]}
-          </span>
-        ) : null}
+        <DiceRoll dice={view.lastRoll} roll={rolls} />
         {error ? (
           <span className="rounded bg-bordo px-2 py-1 text-xs font-semibold">{error}</span>
         ) : null}
@@ -196,6 +210,19 @@ export function GameScreen() {
             className="rounded bg-stone-100 px-3 py-1.5 text-sm font-semibold text-stone-900 disabled:opacity-30"
           >
             Terminar turno
+          </button>
+          <button
+            type="button"
+            aria-pressed={muted}
+            title={muted ? 'Sonido apagado' : 'Sonido prendido'}
+            onClick={() => {
+              const next = !muted;
+              setMuted(next);
+              setMutedState(next);
+            }}
+            className="rounded bg-stone-700 px-2 py-1.5 text-sm hover:bg-stone-600"
+          >
+            {muted ? '🔇' : '🔊'}
           </button>
         </div>
       </header>
@@ -303,7 +330,10 @@ export function GameScreen() {
             </h2>
             <ul className="grid grid-cols-5 gap-1 text-center font-mono text-xs">
               {RESOURCES.map((resource) => (
-                <li key={resource} className="rounded bg-stone-800 px-1 py-1">
+                <li
+                  key={`${resource}-${gained.has(resource) ? rolls : 0}`}
+                  className={`rounded bg-stone-800 px-1 py-1 ${gained.has(resource) ? 'gain-flash' : ''}`}
+                >
                   <div className="text-[10px] text-stone-400">{RESOURCE_LABELS[resource]}</div>
                   <div className="text-base">{view.me.resources[resource]}</div>
                 </li>
@@ -358,6 +388,8 @@ export function GameScreen() {
               send({ type: 'maritimeTrade', give, want });
             }}
           />
+
+          <Chat messages={chat} nameOf={nameOf} onSend={sendChat} />
 
           <div className="min-h-0 flex-1">
             <h2 className="mb-1 text-xs font-bold tracking-widest text-stone-400 uppercase">

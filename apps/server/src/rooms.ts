@@ -241,6 +241,23 @@ export const startGame = (room: Room): ReadonlyGameState => {
   return state;
 };
 
+/**
+ * A rematch: same room, same seats, a new game.
+ *
+ * The action list starts empty and a fresh seed is drawn, so the new game is
+ * as replayable as the old one was. Nothing about the previous game is kept —
+ * that is what "rematch" means.
+ */
+export const restartGame = (room: Room): ReadonlyGameState => {
+  room.actions.length = 0;
+  room.started = false;
+  for (const seat of room.seats) delete seat.blockingSince;
+  const state = startGame(room);
+  store.deleteRoom(room.code);
+  persistRoom(room);
+  return state;
+};
+
 /** Hands the host role to the next connected seat. */
 export const migrateHost = (room: Room): void => {
   const host = seatOf(room, room.hostId);

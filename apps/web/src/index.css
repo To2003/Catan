@@ -6,3 +6,37 @@
   --color-verde: #4c956c;
   --color-amarillo: #e8c547;
 }
+
+/* A short tumble when the dice land, and a soft flash on production. */
+@keyframes tumble {
+  from {
+    transform: scale(1.3) rotate(-10deg);
+  }
+  to {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.dice-tumble {
+  animation: tumble 350ms ease-out;
+}
+
+@keyframes gain {
+  0% {
+    background-color: rgb(255 255 255 / 0.35);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.gain-flash {
+  animation: gain 700ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dice-tumble,
+  .gain-flash {
+    animation: none;
+  }
+}

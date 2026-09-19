@@ -4,3 +4,6 @@
  * the button at roughly the right moment.
  */
 export const FORCE_TURN_HINT_MS = 2 * 60 * 1000;
+
+/** Matches the server's limit, so the box stops you before the server does. */
+export const MAX_CHAT_LENGTH = 300;

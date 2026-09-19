@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import { createRequire } from 'node:module';
 import type { Action, PlayerColor, PlayerId } from '@tierra-austral/engine';
 
 /**
@@ -13,7 +13,27 @@ import type { Action, PlayerColor, PlayerId } from '@tierra-austral/engine';
  * flagged this decision. Node still prints an experimental warning for it; the
  * API used here is a handful of calls, and the cost of moving to better-sqlite3
  * later is this file.
+ *
+ * It is loaded through `createRequire` rather than imported: `node:sqlite` is
+ * newer than esbuild's list of Node builtins, so the production bundle rewrote
+ * `import 'node:sqlite'` into `import 'sqlite'` — a package that does not
+ * exist — and the server only failed once it started. A require at runtime is
+ * out of the bundler's reach.
  */
+const require = createRequire(import.meta.url);
+
+interface SqliteModule {
+  new (path: string): {
+    exec(sql: string): void;
+    prepare(sql: string): {
+      run(...params: (string | number | null)[]): unknown;
+      all(...params: (string | number | null)[]): unknown[];
+    };
+    close(): void;
+  };
+}
+
+const DatabaseSync = (require('node:sqlite') as { DatabaseSync: SqliteModule }).DatabaseSync;
 
 export interface StoredSeat {
   readonly playerId: PlayerId;

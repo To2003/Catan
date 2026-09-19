@@ -124,100 +124,106 @@ describe('simultaneous discards', () => {
     await harness.close();
   });
 
-  it('accepts both, even though the second one carries a version that just changed', async () => {
-    const { host, second, third } = await seatThree(harness);
-    const players = [host, second, third];
-    host.socket.emit('room:start');
-    await until(() => players.every((client) => client.view !== undefined), 'views');
+  it(
+    'accepts both, even though the second one carries a version that just changed',
+    { timeout: 60_000 },
+    async () => {
+      const { host, second, third } = await seatThree(harness);
+      const players = [host, second, third];
+      host.socket.emit('room:start');
+      await until(() => players.every((client) => client.view !== undefined), 'views');
 
-    // Drive the game to a discard: play setup, then roll until a seven lands
-    // with enough cards on the table. Rather than wait for one, the test hands
-    // the room a seven by rolling repeatedly — the engine decides when.
-    for (let step = 0; step < 24; step += 1) {
-      const view = host.view as PlayerView;
-      if (view.phase.kind !== 'setup') break;
-      const client = players.find((candidate) => candidate.playerId === view.currentPlayer);
-      const moves = (client?.view as PlayerView).legalMoves;
-      const before = client?.view?.version ?? 0;
-      const action =
-        view.phase.step === 'settlement'
-          ? {
-              type: 'placeSettlement',
-              vertex: moves.settlements[Math.floor(moves.settlements.length / 2)],
-            }
-          : { type: 'placeRoad', edge: moves.roads[0] };
-      client?.socket.emit('game:action', { action, expectedVersion: before });
-      await until(() => (host.view?.version ?? 0) > before, `setup step ${step}`);
-    }
-
-    // Give everybody cards by rolling; stop as soon as two players owe a discard.
-    let rolls = 0;
-    while (rolls < 400) {
-      const view = host.view as PlayerView;
-      if (view.phase.kind === 'discard' && Object.keys(view.phase.pending).length >= 2) break;
-
-      // A seven with a single player over the limit is not the case under
-      // test: resolve it and keep rolling until two of them owe at once.
-      if (view.phase.kind === 'discard') {
-        const [playerId] = Object.keys(view.phase.pending);
-        const client = players.find((candidate) => candidate.playerId === playerId);
-        if (!client?.view) break;
-        const before = client.view.version;
-        client.socket.emit('game:action', {
-          action: { type: 'discard', cards: pickDiscard(client) },
-          expectedVersion: before,
-        });
-        await until(() => host.view?.phase.kind !== 'discard', `single discard ${rolls}`);
-        rolls += 1;
-        continue;
+      // Drive the game to a discard: play setup, then roll until a seven lands
+      // with enough cards on the table. Rather than wait for one, the test hands
+      // the room a seven by rolling repeatedly — the engine decides when.
+      for (let step = 0; step < 24; step += 1) {
+        const view = host.view as PlayerView;
+        if (view.phase.kind !== 'setup') break;
+        const client = players.find((candidate) => candidate.playerId === view.currentPlayer);
+        const moves = (client?.view as PlayerView).legalMoves;
+        const before = client?.view?.version ?? 0;
+        const action =
+          view.phase.step === 'settlement'
+            ? {
+                type: 'placeSettlement',
+                vertex: moves.settlements[Math.floor(moves.settlements.length / 2)],
+              }
+            : { type: 'placeRoad', edge: moves.roads[0] };
+        client?.socket.emit('game:action', { action, expectedVersion: before });
+        await until(() => (host.view?.version ?? 0) > before, `setup step ${step}`);
       }
 
-      const client = players.find((candidate) => candidate.playerId === view.currentPlayer);
-      if (!client?.view) break;
-      const before = client.view.version;
-      const action =
-        view.phase.kind === 'preRoll'
-          ? { type: 'rollDice' }
-          : view.phase.kind === 'main'
-            ? { type: 'endTurn' }
-            : view.phase.kind === 'moveRobber'
-              ? { type: 'moveRobber', hex: client.view.legalMoves.robberHexes[0] }
-              : view.phase.kind === 'steal'
-                ? { type: 'steal', target: client.view.legalMoves.stealTargets[0] }
-                : undefined;
-      if (!action) break;
-      client.socket.emit('game:action', { action, expectedVersion: before });
-      await until(() => (host.view?.version ?? 0) > before, `roll ${rolls}`);
-      rolls += 1;
-    }
+      // Give everybody cards by rolling; stop as soon as two players owe a
+      // discard. How long that takes is up to the dice, so the cap is generous
+      // and the test says so if it never got there.
+      let rolls = 0;
+      while (rolls < 250) {
+        const view = host.view as PlayerView;
+        if (view.phase.kind === 'discard' && Object.keys(view.phase.pending).length >= 2) break;
 
-    const view = host.view as PlayerView;
-    expect(view.phase.kind, 'the run never reached a discard').toBe('discard');
-    if (view.phase.kind !== 'discard') return;
+        // A seven with a single player over the limit is not the case under
+        // test: resolve it and keep rolling until two of them owe at once.
+        if (view.phase.kind === 'discard') {
+          const [playerId] = Object.keys(view.phase.pending);
+          const client = players.find((candidate) => candidate.playerId === playerId);
+          if (!client?.view) break;
+          const before = client.view.version;
+          client.socket.emit('game:action', {
+            action: { type: 'discard', cards: pickDiscard(client) },
+            expectedVersion: before,
+          });
+          await until(() => host.view?.phase.kind !== 'discard', `single discard ${rolls}`);
+          rolls += 1;
+          continue;
+        }
 
-    const owing = Object.keys(view.phase.pending);
-    expect(owing.length).toBeGreaterThanOrEqual(2);
+        const client = players.find((candidate) => candidate.playerId === view.currentPlayer);
+        if (!client?.view) break;
+        const before = client.view.version;
+        const action =
+          view.phase.kind === 'preRoll'
+            ? { type: 'rollDice' }
+            : view.phase.kind === 'main'
+              ? { type: 'endTurn' }
+              : view.phase.kind === 'moveRobber'
+                ? { type: 'moveRobber', hex: client.view.legalMoves.robberHexes[0] }
+                : view.phase.kind === 'steal'
+                  ? { type: 'steal', target: client.view.legalMoves.stealTargets[0] }
+                  : undefined;
+        if (!action) break;
+        client.socket.emit('game:action', { action, expectedVersion: before });
+        await until(() => (host.view?.version ?? 0) > before, `roll ${rolls}`);
+        rolls += 1;
+      }
 
-    // Both discard without waiting for the other, both carrying the version
-    // they last saw. The second one's version is stale by the time it lands.
-    const version = view.version;
-    const discards = owing.map((playerId) => {
-      const client = players.find((candidate) => candidate.playerId === playerId);
-      return { client, cards: client ? pickDiscard(client) : {} };
-    });
+      const view = host.view as PlayerView;
+      expect(view.phase.kind, 'the run never reached a discard').toBe('discard');
+      if (view.phase.kind !== 'discard') return;
 
-    for (const { client, cards } of discards) {
-      client?.socket.emit('game:action', {
-        action: { type: 'discard', cards },
-        expectedVersion: version,
+      const owing = Object.keys(view.phase.pending);
+      expect(owing.length).toBeGreaterThanOrEqual(2);
+
+      // Both discard without waiting for the other, both carrying the version
+      // they last saw. The second one's version is stale by the time it lands.
+      const version = view.version;
+      const discards = owing.map((playerId) => {
+        const client = players.find((candidate) => candidate.playerId === playerId);
+        return { client, cards: client ? pickDiscard(client) : {} };
       });
-    }
 
-    await until(() => host.view?.phase.kind !== 'discard', 'the discards to resolve');
+      for (const { client, cards } of discards) {
+        client?.socket.emit('game:action', {
+          action: { type: 'discard', cards },
+          expectedVersion: version,
+        });
+      }
 
-    // Nobody was told their valid discard was stale.
-    for (const client of players) {
-      expect(client.errors.map((error) => error.code)).not.toContain('STALE_STATE');
-    }
-  });
+      await until(() => host.view?.phase.kind !== 'discard', 'the discards to resolve');
+
+      // Nobody was told their valid discard was stale.
+      for (const client of players) {
+        expect(client.errors.map((error) => error.code)).not.toContain('STALE_STATE');
+      }
+    },
+  );
 });

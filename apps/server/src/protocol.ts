@@ -25,6 +25,7 @@ export type TransportError =
   | 'GAME_IN_PROGRESS'
   | 'GAME_NOT_STARTED'
   | 'NOTHING_TO_FORCE'
+  | 'GAME_NOT_OVER'
   | 'TOO_SOON';
 
 export type ErrorPayload = { readonly code: ErrorCode | TransportError; readonly message: string };
@@ -58,6 +59,7 @@ export interface ClientToServer {
   'room:ready': (payload: unknown) => void;
   'room:start': () => void;
   'room:forceTurn': () => void;
+  'room:rematch': () => void;
   'game:action': (payload: unknown) => void;
   'chat:send': (payload: unknown) => void;
 }

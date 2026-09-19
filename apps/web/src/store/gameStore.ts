@@ -10,6 +10,7 @@ import {
   writeToken,
 } from '../lib/tokens.js';
 import { ERROR_TEXT } from '../lib/errorText.js';
+import { sounds } from '../lib/sounds.js';
 
 /**
  * Everything the client knows, which is only ever what the server told it.
@@ -60,6 +61,7 @@ interface GameStore {
   resume: () => void;
   send: (action: Action) => void;
   sendChat: (text: string) => void;
+  rematch: () => void;
   clearError: () => void;
 }
 
@@ -85,6 +87,16 @@ export const useGame = create<GameStore>((set, get) => {
     set({ view });
   });
   socket.on('game:events', (events: GameEvent[]) => {
+    // A sound per kind of thing that happened, at most one of each per batch.
+    const kinds = new Set(events.map((event) => event.type));
+    if (kinds.has('DiceRolled')) sounds.dice();
+    if (kinds.has('ResourcesProduced') || kinds.has('SetupResourcesGranted')) sounds.production();
+    if (kinds.has('BuildingPlaced') || kinds.has('RoadPlaced') || kinds.has('CityUpgraded')) {
+      sounds.build();
+    }
+    if (kinds.has('TradeConfirmed') || kinds.has('MaritimeTraded')) sounds.trade();
+    if (kinds.has('GameWon')) sounds.win();
+
     set((state) => ({ events: [...state.events, ...events] }));
   });
   socket.on('chat:message', (message: ChatMessage) => {
@@ -149,6 +161,10 @@ export const useGame = create<GameStore>((set, get) => {
     },
     sendChat: (text) => {
       socket.emit('chat:send', { text });
+    },
+    rematch: () => {
+      set({ events: [], error: undefined });
+      socket.emit('room:rematch');
     },
     clearError: () => {
       set({ error: undefined });

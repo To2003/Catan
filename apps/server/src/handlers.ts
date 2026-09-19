@@ -27,6 +27,7 @@ import {
   seatByToken,
   persistAction,
   persistRoom,
+  restartGame,
   seatOf,
   startGame,
   type Room,
@@ -64,6 +65,7 @@ const MESSAGES: Record<TransportError, string> = {
   GAME_IN_PROGRESS: 'La partida ya empezó',
   GAME_NOT_STARTED: 'La partida todavía no empezó',
   NOTHING_TO_FORCE: 'No hay a quién forzarle el turno',
+  GAME_NOT_OVER: 'La partida todavía no terminó',
   TOO_SOON: 'Todavía no pasaron los 2 minutos',
 };
 
@@ -362,6 +364,27 @@ export const registerHandlers = (io: GameServer): void => {
           if (!action) break;
           if (apply(session.room, blocked.playerId, action)) break;
         }
+        publish(session.room);
+      });
+    });
+
+    socket.on('room:rematch', () => {
+      const session = sessionOf(socket);
+      if (!session) {
+        fail(socket, 'NO_SESSION');
+        return;
+      }
+      if (session.room.hostId !== session.playerId) {
+        fail(socket, 'NOT_HOST');
+        return;
+      }
+      if (session.room.state?.phase.kind !== 'gameOver') {
+        fail(socket, 'GAME_NOT_OVER');
+        return;
+      }
+
+      void queue.run(session.room.code, () => {
+        restartGame(session.room);
         publish(session.room);
       });
     });

@@ -44,7 +44,13 @@ const forbiddenInEngine = {
 
 export default defineConfig(
   {
-    ignores: ['**/dist/**', '**/coverage/**', '**/node_modules/**', '**/*.tsbuildinfo'],
+    ignores: [
+      '**/dist/**',
+      '**/build/**',
+      '**/coverage/**',
+      '**/node_modules/**',
+      '**/*.tsbuildinfo',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
