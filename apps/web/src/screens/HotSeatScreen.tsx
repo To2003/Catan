@@ -4,7 +4,9 @@ import {
   applyAction,
   availableMaritimeRates,
   createGame,
+  isLegalAction,
   isVisibleTo,
+  publicVictoryPoints,
   legalCitySpots,
   legalRoadSpots,
   legalRobberHexes,
@@ -12,8 +14,8 @@ import {
   legalStealTargets,
   victoryPoints,
   type Action,
+  type DevCard,
   type EdgeId,
-  type ErrorCode,
   type GameEvent,
   type HexId,
   type PlayerId,
@@ -25,7 +27,10 @@ import {
 } from '@tierra-austral/engine';
 import { Board } from '../components/board/Board.js';
 import { DiscardModal } from '../components/DiscardModal.js';
+import { ERROR_TEXT } from '../lib/errorText.js';
 import { TradePanel } from '../components/TradePanel.js';
+import { DevCardPanel } from '../components/DevCardPanel.js';
+import { ResourceChoiceModal } from '../components/ResourceChoiceModal.js';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
 import { eventText } from '../lib/eventText.js';
 import { RESOURCE_LABELS } from '../lib/terrainStyles.js';
@@ -48,23 +53,6 @@ const SEATS: readonly PlayerSeat[] = [
   { id: 'p4', name: 'Dante', color: 'amarillo' },
 ];
 
-const ERROR_TEXT: Partial<Record<ErrorCode, string>> = {
-  NOT_YOUR_TURN: 'No es tu turno',
-  WRONG_PHASE: 'No se puede en esta fase',
-  INSUFFICIENT_RESOURCES: 'No te alcanzan los recursos',
-  DISTANCE_RULE: 'Regla de distancia',
-  NOT_CONNECTED: 'No conecta con nada tuyo',
-  NOT_ENOUGH_PIECES: 'No te quedan piezas',
-  OCCUPIED: 'Ya hay algo ahí',
-  NO_SETTLEMENT: 'No hay asentamiento',
-  NOT_OWNER: 'No es tuyo',
-  ALREADY_CITY: 'Ya es una ciudad',
-  GAME_OVER: 'La partida terminó',
-  INVALID_AMOUNT: 'Cantidad inválida',
-  INVALID_DISCARD: 'Tenés que descartar la cantidad exacta',
-  NOT_IMPLEMENTED: 'Todavía no está implementado',
-};
-
 const phaseText = (state: ReadonlyGameState): string => {
   const phase = state.phase;
   switch (phase.kind) {
@@ -80,6 +68,8 @@ const phaseText = (state: ReadonlyGameState): string => {
       return 'Elegir a quién robarle';
     case 'main':
       return 'Turno principal';
+    case 'roadBuilding':
+      return `Construcción de caminos: te queda${phase.remaining === 1 ? '' : 'n'} ${phase.remaining}`;
     case 'gameOver':
       return 'Partida terminada';
     default:
@@ -92,6 +82,8 @@ export function HotSeatScreen() {
   const [game, setGame] = useState<ReadonlyGameState>(() => createGame(seed, SEATS));
   const [log, setLog] = useState<readonly GameEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
+  /** Which card is waiting for the player to choose its resources. */
+  const [choosing, setChoosing] = useState<'yearOfPlenty' | 'monopoly' | null>(null);
   const [debug, setDebug] = useState(readDebugFromUrl);
 
   const nameOf = useCallback(
@@ -115,7 +107,7 @@ export function HotSeatScreen() {
     (action: Action, as: PlayerId = active) => {
       const result = applyAction(game, as, action);
       if (!result.ok) {
-        setError(ERROR_TEXT[result.error] ?? result.error);
+        setError(ERROR_TEXT[result.error]);
         return;
       }
       setError(null);
@@ -180,6 +172,30 @@ export function HotSeatScreen() {
       send({ type: 'maritimeTrade', give, want });
     },
     [send],
+  );
+
+  const onPlayCard = useCallback(
+    (card: DevCard) => {
+      if (card === 'yearOfPlenty' || card === 'monopoly') {
+        setChoosing(card);
+        return;
+      }
+      if (card === 'knight') send({ type: 'playKnight' });
+      if (card === 'roadBuilding') send({ type: 'playRoadBuilding' });
+    },
+    [send],
+  );
+
+  const onChoose = useCallback(
+    (chosen: Resource[]) => {
+      const [first, second] = chosen;
+      if (choosing === 'monopoly' && first) send({ type: 'playMonopoly', resource: first });
+      if (choosing === 'yearOfPlenty' && first && second) {
+        send({ type: 'playYearOfPlenty', resources: [first, second] });
+      }
+      setChoosing(null);
+    },
+    [choosing, send],
   );
 
   const onDiscard = useCallback(
@@ -252,6 +268,16 @@ export function HotSeatScreen() {
       </header>
 
       <div className="relative flex min-h-0 flex-1">
+        {choosing ? (
+          <ResourceChoiceModal
+            title={choosing === 'monopoly' ? 'Monopolio: elegí un recurso' : 'Año de abundancia'}
+            count={choosing === 'monopoly' ? 1 : 2}
+            onConfirm={onChoose}
+            onCancel={() => {
+              setChoosing(null);
+            }}
+          />
+        ) : null}
         {discarding ? (
           <DiscardModal player={discarding.player} owed={discarding.owed} onConfirm={onDiscard} />
         ) : null}
@@ -296,8 +322,21 @@ export function HotSeatScreen() {
                       style={{ backgroundColor: PLAYER_COLORS[player.color] }}
                     />
                     <span className={isActive ? 'font-semibold' : ''}>{player.name}</span>
-                    <span className="ml-auto font-mono text-xs text-stone-400">
-                      {victoryPoints(game, id)} PV
+                    {game.longestRoad?.owner === id ? (
+                      <span title="Camino más largo" className="text-xs">
+                        🛣
+                      </span>
+                    ) : null}
+                    {game.largestArmy === id ? (
+                      <span title="Gran ejército" className="text-xs">
+                        ⚔
+                      </span>
+                    ) : null}
+                    <span
+                      className="ml-auto font-mono text-xs text-stone-400"
+                      title={isActive ? 'Incluye tus cartas de PV' : 'Puntos visibles'}
+                    >
+                      {isActive ? victoryPoints(game, id) : publicVictoryPoints(game, id)} PV
                     </span>
                   </li>
                 );
@@ -354,6 +393,16 @@ export function HotSeatScreen() {
               {activePlayer?.stock.cities ?? 0} ciudades
             </p>
           </div>
+
+          <DevCardPanel
+            game={game}
+            playerId={active}
+            canBuy={isLegalAction(game, active, { type: 'buyDevCard' })}
+            onBuy={() => {
+              send({ type: 'buyDevCard' });
+            }}
+            onPlay={onPlayCard}
+          />
 
           <TradePanel
             rates={rates}
