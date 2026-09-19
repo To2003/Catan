@@ -623,7 +623,7 @@ El orden es **parte del contrato**: de él dependen el test de snapshot del tabl
 
 4. **Tablero** — los pasos 1 a 3. Va primero para que el snapshot de M1 siga valiendo.
 5. **Orden de turnos** — un shuffle de los asientos, en el orden en que se recibieron.
-6. **Mazo de desarrollo** — un shuffle de las 25 cartas. Se mezcla acá desde M2 aunque nadie robe hasta M5: meterlo después correría todas las tiradas de todas las semillas.
+6. **Mazo de desarrollo** — un shuffle de las 25 cartas. Se mezcla acá desde M2 aunque nadie robe hasta M5: meterlo después correría todas las tiradas de todas las semillas. **El tope del mazo es `devDeck[0]`** y se roba con un `shift`: el shuffle produce el mazo leído de arriba hacia abajo. Comprar una carta **no consume RNG**, así que las compras no corren la secuencia de dados.
 
 **Durante la partida:**
 

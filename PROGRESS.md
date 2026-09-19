@@ -12,7 +12,7 @@ y después este archivo.
 | M2   | Motor: setup, dados, producción, construir | ✅ Completado |
 | M3   | 7, descarte, ladrón y robo                 | ✅ Completado |
 | M4   | Comercio con banco y puertos               | ✅ Completado |
-| M5   | Cartas de desarrollo, bonos y victoria     | ⬜ Pendiente  |
+| M5   | Cartas de desarrollo, bonos y victoria     | ✅ Completado |
 | M6   | Server, salas, lobby y sincronización      | ⬜ Pendiente  |
 | M7   | Comercio entre jugadores con contraofertas | ⬜ Pendiente  |
 | M8   | Reconexión, SQLite, chat, pulido y deploy  | ⬜ Pendiente  |
@@ -362,6 +362,101 @@ FUZZ_GAMES=40 FUZZ_MAX_ACTIONS=3000 pnpm --filter @tierra-austral/engine test fu
 
 - **§4.9**: la tasa la calcula el motor y no viaja en la acción; 1 unidad por acción; gana la mejor
   tasa; la ciudad conserva el puerto y el asentamiento del setup ya da acceso.
+
+---
+
+## M5 — Cartas de desarrollo, bonos y victoria ✅
+
+**Qué quedó hecho**
+
+- **Las 5 cartas**: caballero, construcción de caminos, año de abundancia, monopolio y PV.
+- **Camino más largo** con recálculo tras cada camino y cada asentamiento, y el oráculo de fuerza
+  bruta en tests.
+- **Gran ejército** con mayoría estricta.
+- **Victoria con puntos ocultos**: `publicVictoryPoints` y `victoryPoints`.
+- Hot-seat completo: comprar, jugar, modales, modo de colocación e indicadores de bonos.
+- 257 tests en verde.
+
+### Decisiones técnicas de M5
+
+1. **El tope del mazo es `devDeck[0]`**, con `shift`. El shuffle de `createGame` produce el mazo
+   leído de arriba hacia abajo, así que el índice 0 es la próxima carta y un estado guardado se lee
+   en el orden correcto. Con `pop()` el "tope" sería el último elemento. A 25 cartas el costo es
+   irrelevante. Está en §12.11.
+2. **Comprar no consume RNG.** El mazo se barajó una sola vez, en `createGame`. Consecuencia: las
+   compras no corren la secuencia de dados, que es exactamente para lo que M2 adelantó ese shuffle.
+3. **Qué se puede jugar es una pregunta de multiconjunto**: copias en mano menos copias compradas
+   este turno. Ninguna carta necesita identidad propia.
+4. **Dos funciones de puntos.** `publicVictoryPoints` (edificios + bonos) es lo que ve la mesa;
+   `victoryPoints` suma las cartas de PV y es con la que se gana. Quien muestra puntos ajenos tiene
+   que pedir la pública **a propósito**.
+5. **La victoria corta la cadena.** Si un caballero da los 10 PV, el ladrón nunca se mueve; si el
+   primer camino de la carta los da, el segundo se pierde. Los dos casos tienen test.
+6. **La carta de caminos no se queda esperando.** La fase se cierra sola apenas no hay arista legal
+   o no hay stock, y la carta se consume igual; si al jugarla no hay **ninguna** colocación legal,
+   se rechaza y la carta queda en la mano (§12.8).
+7. **Año de abundancia es todo o nada**, a diferencia de la escasez de producción del §12.1. El
+   contraste es deliberado: ahí hay una regla específica de reparto parcial, acá no.
+8. **La UI pregunta por qué no se puede.** El panel de cartas llama a `validateAction` y traduce el
+   código en vez de reimplementar las condiciones. El botón de comprar usa `isLegalAction`.
+
+### Camino más largo
+
+El recorrido es un _trail_: cada camino se usa una sola vez, los vértices pueden repetirse. Tres
+detalles deciden casi todos los casos borde, y los tres tienen fixture:
+
+- **La búsqueda arranca desde todos los vértices** que toca la red, no solo desde las puntas. Un
+  anillo no tiene puntas y mediría 0.
+- **Un edificio ajeno termina un recorrido sin borrarlo**: el camino que llega a ese vértice cuenta,
+  pero el recorrido no sigue a través. Los edificios propios no cortan nada.
+- **Dos hexes vecinos comparten una arista**: la figura tiene 6 + 6 − 1 = **11** caminos, con dos
+  vértices de grado 3 y el resto de grado 2, así que hay recorrido euleriano y mide 11.
+
+Fixtures: cadena recta, Y (las dos ramas más largas unidas, nunca las tres), anillo de 6, los 11 de
+dos hexes vecinos, cadena que termina en asentamiento rival (cuenta entera), asentamiento rival en
+el medio (se parte), y los cinco casos de transferencia del §12.2.
+
+**El oráculo** (`test/longestRoadOracle.ts`) es una segunda implementación, a propósito lenta: una
+búsqueda exhaustiva sobre estados (posición, caminos ya usados). Es **la única excepción** a "las
+reglas se enuncian una sola vez", y se justifica así: es el algoritmo más fácil de equivocar del
+juego, y el único test que detecta un error que el autor no pensó es una implementación
+independiente. Vive solo en `test/` y nunca se exporta desde `src/`. Verifica la implementación, no
+la regla: las dos codifican la misma definición.
+
+### Fuzz
+
+Invariantes nuevos: las 25 cartas siempre están en el mazo, una mano o jugadas (acumuladas **desde
+los eventos**, porque el estado no guarda lo que puede derivar); `knightsPlayed` coincide con los
+caballeros jugados; nunca más de una carta por turno; los largos coinciden con el oráculo; y el
+titular de cada bono está en el umbral y es un máximo.
+
+Sobre los bonos: **ninguno de los dos titulares se puede derivar solo de la posición**, porque un
+empate deja el bono donde estaba. Así que se verifica todo lo que la posición sí decide, más algo
+exacto: nadie puede tener 3 caballeros sin tener el gran ejército, porque se entrega en el momento
+en que se juega el tercero y los contadores nunca bajan.
+
+### Medición del fuzz, hito por hito
+
+Con el tope por defecto (400 acciones, 100 partidas):
+
+| Hito | Trabadas | Máx. PV (prom.) |
+| ---- | -------- | --------------- |
+| M2   | 100/100  | 3,6             |
+| M3   | 100/100  | 3,8             |
+| M4   | 99/100   | 4,3             |
+| M5   | 100/100  | 6,0             |
+
+Con `FUZZ_MAX_ACTIONS=3000`, que es donde se ve: M3 terminaba **20 de 40**, M4 **38 de 40**, y M5
+**40 de 40**, con una media de 781 acciones (1233 en M4). Las cartas aceleran bastante las partidas.
+
+### Cambios al SPEC en M5
+
+- **§12.11**: el tope del mazo es `devDeck[0]` y comprar no consume RNG.
+
+### Deuda técnica anotada
+
+- **M7 — sacar `NOT_IMPLEMENTED`** (ver arriba). En M5 se agregó `notImplemented.test.ts`, que fija
+  la lista exacta de lo que falta: las cinco acciones de comercio entre jugadores.
 
 ---
 
