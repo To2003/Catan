@@ -1,48 +1,25 @@
-import {
-  validateAction,
-  type Action,
-  type DevCard,
-  type PlayerId,
-  type ReadonlyGameState,
-} from '@tierra-austral/engine';
+import type { DevCard, LegalMoves } from '@tierra-austral/engine';
 import { DEV_CARD_LABELS } from '../lib/eventText.js';
 import { ERROR_TEXT } from '../lib/errorText.js';
 
 interface DevCardPanelProps {
-  readonly game: ReadonlyGameState;
-  readonly playerId: PlayerId;
-  readonly canBuy: boolean;
+  /** The hand, from the view's own player. */
+  readonly hand: readonly DevCard[];
+  readonly deckLeft: number;
+  /** Worked out by the engine, wherever it runs: the server, or the hot-seat. */
+  readonly moves: LegalMoves;
   readonly onBuy: () => void;
   readonly onPlay: (card: DevCard) => void;
 }
 
 const ORDER: readonly DevCard[] = ['knight', 'roadBuilding', 'yearOfPlenty', 'monopoly', 'vp'];
 
-/** The action a card is played with. Victory cards have none: they are never played. */
-const PLAY_ACTION: Record<DevCard, Action | undefined> = {
-  knight: { type: 'playKnight' },
-  roadBuilding: { type: 'playRoadBuilding' },
-  // The resources are chosen in a modal; this is only for asking whether the
-  // card could be played at all, so any valid pair does.
-  yearOfPlenty: { type: 'playYearOfPlenty', resources: ['wood', 'wood'] },
-  monopoly: { type: 'playMonopoly', resource: 'wood' },
-  vp: undefined,
-};
-
-/**
- * The hand of development cards, with the reason a card cannot be played right
- * now. The reason is whatever the engine says: the panel asks validate rather
- * than restating any rule.
- */
-export function DevCardPanel({ game, playerId, canBuy, onBuy, onPlay }: DevCardPanelProps) {
-  const player = game.players.find((candidate) => candidate.id === playerId);
-  const hand = player?.devCards ?? [];
-
+export function DevCardPanel({ hand, deckLeft, moves, onBuy, onPlay }: DevCardPanelProps) {
   const reasonNotToPlay = (card: DevCard): string | undefined => {
-    const action = PLAY_ACTION[card];
-    if (!action) return 'Los PV no se juegan: cuentan solos';
-    const error = validateAction(game, playerId, action);
-    return error === null ? undefined : ERROR_TEXT[error];
+    const option = moves.devCardOptions[card];
+    if (option.playable) return undefined;
+    if (card === 'vp') return 'Los PV no se juegan: cuentan solos';
+    return option.reason === undefined ? 'No se puede ahora' : ERROR_TEXT[option.reason];
   };
 
   return (
@@ -51,11 +28,11 @@ export function DevCardPanel({ game, playerId, canBuy, onBuy, onPlay }: DevCardP
         <h2 className="text-xs font-bold tracking-widest text-stone-400 uppercase">Cartas</h2>
         <button
           type="button"
-          disabled={!canBuy}
+          disabled={!moves.canBuyDevCard}
           onClick={onBuy}
           className="ml-auto rounded bg-stone-100 px-2 py-0.5 text-xs font-semibold text-stone-900 disabled:opacity-30"
         >
-          Comprar ({game.devDeck.length})
+          Comprar ({deckLeft})
         </button>
       </div>
 
