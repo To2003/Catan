@@ -53,7 +53,12 @@ export default defineConfig(
       parserOptions: {
         projectService: {
           // Config files live outside every package's tsconfig graph.
-          allowDefaultProject: ['*.config.js', '*.config.ts', 'packages/*/vitest.config.ts'],
+          allowDefaultProject: [
+            '*.config.js',
+            '*.config.ts',
+            'packages/*/vitest.config.ts',
+            'apps/*/vitest.config.ts',
+          ],
         },
         tsconfigRootDir: import.meta.dirname,
       },
