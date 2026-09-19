@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from 'node:crypto';
 import {
   MAX_PLAYERS,
   MIN_PLAYERS,
+  applyAction,
   createGame,
   type Action,
   type PlayerColor,
@@ -9,6 +10,7 @@ import {
   type ReadonlyGameState,
 } from '@tierra-austral/engine';
 import type { PublicSeat, RoomState } from './protocol.js';
+import { memoryStore, type Store } from './persistence.js';
 
 /**
  * Rooms, in memory.
@@ -51,6 +53,125 @@ export interface Room {
 }
 
 const rooms = new Map<string, Room>();
+
+/** Where rooms are written down. Swapped for SQLite at boot (SPEC.md §7.1). */
+let store: Store = memoryStore();
+
+export const useStore = (next: Store): void => {
+  store = next;
+};
+
+export const persistRoom = (room: Room): void => {
+  store.saveRoom({
+    code: room.code,
+    seed: room.seed,
+    hostId: room.hostId,
+    started: room.started,
+    createdAt: room.createdAt,
+    lastActivity: room.lastActivity,
+    seats: room.seats.map((seat) => ({
+      playerId: seat.playerId,
+      name: seat.name,
+      ...(seat.color === undefined ? {} : { color: seat.color }),
+      ready: seat.ready,
+      token: seat.token,
+    })),
+  });
+};
+
+/** Records an applied action, in the order it was applied. */
+export const persistAction = (
+  room: Room,
+  index: number,
+  playerId: PlayerId,
+  action: Action,
+): void => {
+  store.appendAction(room.code, index, playerId, action);
+  persistRoom(room);
+};
+
+/**
+ * Brings back every room from the database, replaying its actions.
+ *
+ * A game is `seed + actions`, so this is a replay and nothing else: no stored
+ * state can disagree with the rules as they are today.
+ */
+export const restoreRooms = (): { restored: number; failed: string[] } => {
+  const failed: string[] = [];
+  let restored = 0;
+
+  for (const stored of store.loadRooms()) {
+    const room: Room = {
+      code: stored.code,
+      seats: stored.seats.map((seat) => ({
+        playerId: seat.playerId,
+        name: seat.name,
+        ...(seat.color === undefined ? {} : { color: seat.color }),
+        ready: seat.ready,
+        // Nobody is connected right after a restart; they come back with their
+        // tokens.
+        connected: false,
+        token: seat.token,
+      })),
+      hostId: stored.hostId,
+      started: stored.started,
+      ...(stored.seed === undefined ? {} : { seed: stored.seed }),
+      actions: [],
+      createdAt: stored.createdAt,
+      lastActivity: stored.lastActivity,
+    };
+
+    if (stored.started && stored.seed !== undefined) {
+      let state = createGame(
+        stored.seed,
+        room.seats.map((seat) => ({
+          id: seat.playerId,
+          name: seat.name,
+          color: seat.color as PlayerColor,
+        })),
+      );
+
+      let broken = false;
+      for (const entry of stored.actions) {
+        const result = applyAction(state, entry.playerId, entry.action);
+        if (!result.ok) {
+          broken = true;
+          break;
+        }
+        state = result.state;
+        room.actions.push(entry);
+      }
+
+      if (broken) {
+        failed.push(stored.code);
+        continue;
+      }
+      room.state = state;
+    }
+
+    rooms.set(room.code, room);
+    restored += 1;
+  }
+
+  return { restored, failed };
+};
+
+/** Drops rooms nobody has touched for a day, in memory and on disk (SPEC.md §7.1). */
+export const sweepIdleRooms = (maxIdleMs: number, now = Date.now()): string[] => {
+  const cutoff = now - maxIdleMs;
+  const dropped: string[] = [];
+
+  for (const [code, room] of rooms) {
+    if (room.lastActivity < cutoff) {
+      rooms.delete(code);
+      dropped.push(code);
+    }
+  }
+  for (const code of store.deleteIdleRooms(cutoff)) {
+    if (!dropped.includes(code)) dropped.push(code);
+  }
+  return dropped;
+};
 
 const newCode = (): string => {
   for (let attempt = 0; attempt < 1000; attempt += 1) {
@@ -151,9 +272,11 @@ export const roomState = (room: Room): RoomState => {
 
 export const dropRoom = (code: string): void => {
   rooms.delete(code);
+  store.deleteRoom(code);
 };
 
 /** Only for tests: forget everything between runs. */
 export const resetRooms = (): void => {
   rooms.clear();
+  store = memoryStore();
 };

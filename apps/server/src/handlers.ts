@@ -25,6 +25,8 @@ import {
   newSeat,
   roomIsFull,
   seatByToken,
+  persistAction,
+  persistRoom,
   seatOf,
   startGame,
   type Room,
@@ -138,6 +140,9 @@ export const registerHandlers = (io: GameServer): void => {
     room.state = result.state;
     room.actions.push({ playerId, action });
     room.lastActivity = Date.now();
+    // Written inside the per-room queue, so the order on disk is the order the
+    // actions were applied in (SPEC.md §7.2).
+    persistAction(room, room.actions.length - 1, playerId, action);
 
     sendEvents(io, room, connections, result.events);
     publish(room);
@@ -160,6 +165,7 @@ export const registerHandlers = (io: GameServer): void => {
 
       // The token goes to its owner's socket and nowhere else, ever.
       socket.emit('session', { playerId: seat.playerId, token: seat.token, code: room.code });
+      persistRoom(room);
       publish(room);
     });
 
@@ -210,6 +216,7 @@ export const registerHandlers = (io: GameServer): void => {
       room.lastActivity = Date.now();
 
       socket.emit('session', { playerId: seat.playerId, token: seat.token, code: room.code });
+      persistRoom(room);
       publish(room);
     });
 
@@ -239,6 +246,7 @@ export const registerHandlers = (io: GameServer): void => {
 
       const seat = seatOf(session.room, session.playerId);
       if (seat) seat.color = parsed.data.color;
+      persistRoom(session.room);
       publish(session.room);
     });
 
@@ -256,6 +264,7 @@ export const registerHandlers = (io: GameServer): void => {
 
       const seat = seatOf(session.room, session.playerId);
       if (seat) seat.ready = parsed.data.ready;
+      persistRoom(session.room);
       publish(session.room);
     });
 
@@ -279,6 +288,7 @@ export const registerHandlers = (io: GameServer): void => {
       }
 
       startGame(session.room);
+      persistRoom(session.room);
       publish(session.room);
     });
 

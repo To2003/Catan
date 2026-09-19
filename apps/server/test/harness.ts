@@ -4,7 +4,8 @@ import { io as connect, type Socket } from 'socket.io-client';
 import type { PlayerView } from '@tierra-austral/engine';
 import { registerHandlers, type GameServer } from '../src/handlers.js';
 import { MAX_MESSAGE_BYTES } from '../src/limits.js';
-import { resetRooms } from '../src/rooms.js';
+import { resetRooms, restoreRooms, useStore } from '../src/rooms.js';
+import { sqliteStore, type Store } from '../src/persistence.js';
 import type { ErrorPayload, RoomState } from '../src/protocol.js';
 
 /**
@@ -35,8 +36,17 @@ export interface Harness {
   close(): Promise<void>;
 }
 
-export const startHarness = async (): Promise<Harness> => {
+export const startHarness = async (options: { db?: string } = {}): Promise<Harness> => {
   resetRooms();
+
+  // A harness with a database behaves like the real server: it writes as it
+  // goes and restores what it finds.
+  let store: Store | undefined;
+  if (options.db !== undefined) {
+    store = sqliteStore(options.db);
+    useStore(store);
+    restoreRooms();
+  }
 
   const httpServer: HttpServer = createServer();
   const io: GameServer = new Server(httpServer, { maxHttpBufferSize: MAX_MESSAGE_BYTES });
@@ -94,6 +104,7 @@ export const startHarness = async (): Promise<Harness> => {
           resolve();
         });
       });
+      store?.close();
       resetRooms();
     },
   };
