@@ -30,11 +30,6 @@ import type {
 
 /** Actions whose milestone has not landed yet. They exist in the union already (SPEC.md §5.3). */
 const NOT_YET_IMPLEMENTED = new Set([
-  'buyDevCard',
-  'playKnight',
-  'playRoadBuilding',
-  'playYearOfPlenty',
-  'playMonopoly',
   'createOffer',
   'respondOffer',
   'counterOffer',
@@ -196,6 +191,13 @@ export const validateAction = (
       return validateCity(state, playerId, action.vertex);
     case 'rollDice':
       return state.phase.kind === 'preRoll' ? null : 'WRONG_PHASE';
+    case 'buyDevCard': {
+      if (state.phase.kind !== 'main') return 'WRONG_PHASE';
+      if (state.devDeck.length === 0) return 'DECK_EMPTY';
+      const player = playerOf(state, playerId);
+      if (!player) return 'INVALID_TARGET';
+      return canAfford(player.resources, COSTS.devCard) ? null : 'INSUFFICIENT_RESOURCES';
+    }
     case 'maritimeTrade': {
       if (state.phase.kind !== 'main') return 'WRONG_PHASE';
       const player = playerOf(state, playerId);

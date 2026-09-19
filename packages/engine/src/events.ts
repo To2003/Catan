@@ -1,11 +1,12 @@
 import type {
+  DevCard,
   EdgeId,
   HexId,
+  Phase,
   PlayerId,
   Resource,
   ResourceBundle,
   VertexId,
-  Phase,
 } from './types.js';
 
 /**
@@ -109,10 +110,50 @@ export type GameEvent =
       readonly rate: number;
     }
 
+  /* Development cards (SPEC.md §4.10) */
+  | { readonly type: 'DevCardBought'; readonly player: PlayerId; readonly deckLeft: number }
+  | {
+      readonly type: 'DevCardDrawn';
+      readonly player: PlayerId;
+      readonly card: DevCard;
+      readonly visibleTo: readonly PlayerId[];
+    }
+  | { readonly type: 'DevCardPlayed'; readonly player: PlayerId; readonly card: DevCard }
+  | {
+      readonly type: 'YearOfPlentyTaken';
+      readonly player: PlayerId;
+      readonly resources: readonly [Resource, Resource];
+    }
+  /** Public with the breakdown: at a table everyone sees who handed over what. */
+  | {
+      readonly type: 'MonopolyResolved';
+      readonly player: PlayerId;
+      readonly resource: Resource;
+      readonly from: readonly { readonly player: PlayerId; readonly amount: number }[];
+      readonly total: number;
+    }
+  | { readonly type: 'RoadBuildingStarted'; readonly player: PlayerId; readonly remaining: number }
+  | { readonly type: 'RoadBuildingEnded'; readonly player: PlayerId; readonly placed: number }
+
+  /* Bonuses (SPEC.md §4.11) */
+  | {
+      readonly type: 'LongestRoadChanged';
+      /** Absent when the bonus falls vacant (SPEC.md §12.2). */
+      readonly owner?: PlayerId;
+      readonly length: number;
+    }
+  | { readonly type: 'LargestArmyChanged'; readonly owner: PlayerId; readonly knights: number }
+
   /* Turn flow */
   | { readonly type: 'PhaseChanged'; readonly phase: Phase }
   | { readonly type: 'TurnEnded'; readonly player: PlayerId; readonly next: PlayerId }
-  | { readonly type: 'GameWon'; readonly player: PlayerId; readonly points: number };
+  | {
+      readonly type: 'GameWon';
+      readonly player: PlayerId;
+      readonly points: number;
+      /** The winner's victory cards, hidden until now (SPEC.md §4.10). */
+      readonly revealedVpCards: number;
+    };
 
 export type GameEventType = GameEvent['type'];
 

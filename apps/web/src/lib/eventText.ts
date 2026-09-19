@@ -1,10 +1,19 @@
 import {
   RESOURCES,
+  type DevCard,
   type GameEvent,
   type PlayerId,
   type ResourceBundle,
 } from '@tierra-austral/engine';
 import { RESOURCE_LABELS } from './terrainStyles.js';
+
+export const DEV_CARD_LABELS: Record<DevCard, string> = {
+  knight: 'Caballero',
+  vp: 'Punto de victoria',
+  roadBuilding: 'Construcción de caminos',
+  yearOfPlenty: 'Año de abundancia',
+  monopoly: 'Monopolio',
+};
 
 const describeBundle = (bundle: Readonly<ResourceBundle>): string =>
   RESOURCES.filter((resource) => bundle[resource] > 0)
@@ -67,11 +76,35 @@ export const eventText = (event: GameEvent, nameOf: (id: PlayerId) => string): s
       return `${nameOf(event.player)} cambia ${event.gave} ${RESOURCE_LABELS[event.give]} por 1 ${
         RESOURCE_LABELS[event.want]
       } (${event.rate}:1)`;
+    case 'DevCardBought':
+      return `${nameOf(event.player)} compra una carta de desarrollo (quedan ${event.deckLeft})`;
+    case 'DevCardDrawn':
+      return `  La carta comprada es ${DEV_CARD_LABELS[event.card]}`;
+    case 'DevCardPlayed':
+      return `${nameOf(event.player)} juega ${DEV_CARD_LABELS[event.card]}`;
+    case 'YearOfPlentyTaken':
+      return `${nameOf(event.player)} toma ${event.resources
+        .map((resource) => RESOURCE_LABELS[resource])
+        .join(' y ')}`;
+    case 'MonopolyResolved':
+      return `${nameOf(event.player)} monopoliza ${RESOURCE_LABELS[event.resource]}: ${
+        event.total
+      } cartas (${event.from.map((from) => `${nameOf(from.player)} ${from.amount}`).join(', ')})`;
+    case 'RoadBuildingStarted':
+      return `${nameOf(event.player)} coloca ${event.remaining} caminos gratis`;
+    case 'RoadBuildingEnded':
+      return `${nameOf(event.player)} colocó ${event.placed} camino(s) de la carta`;
+    case 'LongestRoadChanged':
+      return event.owner === undefined
+        ? 'El camino más largo queda vacante'
+        : `${nameOf(event.owner)} se lleva el camino más largo (${event.length})`;
+    case 'LargestArmyChanged':
+      return `${nameOf(event.owner)} se lleva el gran ejército (${event.knights} caballeros)`;
     case 'PhaseChanged':
       return `Fase: ${event.phase.kind}`;
     case 'TurnEnded':
       return `${nameOf(event.player)} termina su turno, sigue ${nameOf(event.next)}`;
     case 'GameWon':
-      return `¡Gana ${nameOf(event.player)} con ${event.points} PV!`;
+      return `¡Gana ${nameOf(event.player)} con ${event.points} PV (${event.revealedVpCards} cartas de PV)!`;
   }
 };

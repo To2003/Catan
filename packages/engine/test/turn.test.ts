@@ -131,6 +131,7 @@ describe('winning', () => {
       type: 'GameWon',
       player: ANA.id,
       points: VICTORY_POINTS_TO_WIN,
+      revealedVpCards: 0,
     });
   });
 

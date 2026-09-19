@@ -59,6 +59,16 @@ export type ErrorCode =
   | 'INVALID_AMOUNT'
   /** A discard that does not add up to exactly what the player owes. */
   | 'INVALID_DISCARD'
+  /** Buying from an exhausted development deck (SPEC.md §4.10). */
+  | 'DECK_EMPTY'
+  /** Playing a development card the player does not hold. */
+  | 'CARD_NOT_IN_HAND'
+  /** Playing a card bought this turn (SPEC.md §4.10). */
+  | 'CARD_BOUGHT_THIS_TURN'
+  /** A second development card in the same turn (SPEC.md §4.10). */
+  | 'ALREADY_PLAYED_DEV_CARD'
+  /** Road building with nowhere legal to build (SPEC.md §12.8). */
+  | 'NO_LEGAL_PLACEMENT'
   /** The action exists in the union but its milestone has not landed yet. */
   | 'NOT_IMPLEMENTED';
 

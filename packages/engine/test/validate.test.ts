@@ -70,8 +70,11 @@ describe('validateAction: turn and phase gates', () => {
 
   it('reports actions whose milestone has not landed as NOT_IMPLEMENTED', () => {
     const state = mainState();
-    expect(validateAction(state, ANA.id, { type: 'buyDevCard' })).toBe('NOT_IMPLEMENTED');
-    expect(validateAction(state, ANA.id, { type: 'playKnight' })).toBe('NOT_IMPLEMENTED');
+    // The five player-to-player trade actions are M7; trade.test.ts pins the
+    // list exactly.
+    expect(validateAction(state, ANA.id, { type: 'cancelOffer', offerId: 'x' })).toBe(
+      'NOT_IMPLEMENTED',
+    );
   });
 });
 
