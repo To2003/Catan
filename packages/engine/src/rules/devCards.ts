@@ -1,6 +1,7 @@
 import { COSTS, RESOURCES } from '../constants.js';
 import type { GameEvent } from '../events.js';
-import type { DevCard, GameState, PlayerId, ReadonlyGameState } from '../types.js';
+import type { DevCard, GameState, PlayerId, ReadonlyGameState, Resource } from '../types.js';
+import { recomputeLargestArmy } from './largestArmy.js';
 
 /**
  * Development cards (SPEC.md §4.10).
@@ -69,4 +70,62 @@ export const consumeCard = (
   player.devCards.splice(index, 1);
   draft.devCardPlayedThisTurn = true;
   events.push({ type: 'DevCardPlayed', player: playerId, card });
+};
+
+/** The knight: play it, then move the robber (SPEC.md §4.10, §12.3). */
+export const playKnight = (draft: GameState, playerId: PlayerId, events: GameEvent[]): void => {
+  // Where it was played is where the robber will come back to. A knight never
+  // passes through a discard: only a seven builds one.
+  const returnTo = draft.phase.kind === 'preRoll' ? 'preRoll' : 'main';
+
+  consumeCard(draft, playerId, 'knight', events);
+  playerIn(draft, playerId).knightsPlayed += 1;
+  recomputeLargestArmy(draft, playerId, events);
+
+  draft.phase = { kind: 'moveRobber', source: 'knight', returnTo };
+  events.push({ type: 'PhaseChanged', phase: draft.phase });
+};
+
+/** Year of plenty: two cards from the bank, all or nothing (SPEC.md §4.10). */
+export const playYearOfPlenty = (
+  draft: GameState,
+  playerId: PlayerId,
+  resources: readonly [Resource, Resource],
+  events: GameEvent[],
+): void => {
+  consumeCard(draft, playerId, 'yearOfPlenty', events);
+
+  const player = playerIn(draft, playerId);
+  for (const resource of resources) {
+    player.resources[resource] += 1;
+    draft.bank[resource] -= 1;
+  }
+  events.push({ type: 'YearOfPlentyTaken', player: playerId, resources });
+};
+
+/** Monopoly: everybody else hands over that resource (SPEC.md §4.10). */
+export const playMonopoly = (
+  draft: GameState,
+  playerId: PlayerId,
+  resource: Resource,
+  events: GameEvent[],
+): void => {
+  consumeCard(draft, playerId, 'monopoly', events);
+
+  const player = playerIn(draft, playerId);
+  const from: { player: PlayerId; amount: number }[] = [];
+  let total = 0;
+
+  for (const other of draft.players) {
+    if (other.id === playerId) continue;
+    const amount = other.resources[resource];
+    if (amount === 0) continue;
+    other.resources[resource] = 0;
+    player.resources[resource] += amount;
+    total += amount;
+    from.push({ player: other.id, amount });
+  }
+
+  // Public with the breakdown: at a table everyone sees who handed over what.
+  events.push({ type: 'MonopolyResolved', player: playerId, resource, from, total });
 };

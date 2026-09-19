@@ -2,7 +2,7 @@ import type { GameEvent } from './events.js';
 import { buildRoad, buildSettlement, upgradeToCity } from './rules/build.js';
 import { rollDice } from './rules/dice.js';
 import { discard, moveRobber, steal } from './rules/robber.js';
-import { buyDevCard } from './rules/devCards.js';
+import { buyDevCard, playKnight, playMonopoly, playYearOfPlenty } from './rules/devCards.js';
 import { maritimeTrade } from './rules/trade.js';
 import { endTurn } from './rules/turn.js';
 import { checkVictory } from './rules/victory.js';
@@ -80,6 +80,18 @@ export const applyAction = (
 
     case 'buyDevCard':
       buyDevCard(draft, playerId, events);
+      break;
+
+    case 'playKnight':
+      playKnight(draft, playerId, events);
+      break;
+
+    case 'playYearOfPlenty':
+      playYearOfPlenty(draft, playerId, action.resources, events);
+      break;
+
+    case 'playMonopoly':
+      playMonopoly(draft, playerId, action.resource, events);
       break;
 
     case 'maritimeTrade':

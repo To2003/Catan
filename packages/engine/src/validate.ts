@@ -1,4 +1,5 @@
-import { COSTS, RESOURCES } from './constants.js';
+import { COSTS, RESOURCES, emptyBundle } from './constants.js';
+import { playableCount } from './rules/devCards.js';
 import { canTradeMaritime } from './rules/trade.js';
 import {
   canAfford,
@@ -11,6 +12,7 @@ import {
 } from './rules/placement.js';
 import type {
   Action,
+  DevCard,
   EdgeId,
   ErrorCode,
   HexId,
@@ -155,6 +157,27 @@ const validateDiscard = (
   return total === owed ? null : 'INVALID_DISCARD';
 };
 
+/**
+ * The rules every development card shares (SPEC.md §4.10): one card per turn,
+ * never one bought this turn, and only the knight may be played before the
+ * roll.
+ */
+const validatePlayCard = (
+  state: ReadonlyGameState,
+  playerId: PlayerId,
+  card: DevCard,
+): ErrorCode | null => {
+  const allowed = card === 'knight' ? ['preRoll', 'main'] : ['main'];
+  if (!allowed.includes(state.phase.kind)) return 'WRONG_PHASE';
+  if (state.devCardPlayedThisTurn) return 'ALREADY_PLAYED_DEV_CARD';
+
+  const player = playerOf(state, playerId);
+  if (!player) return 'INVALID_TARGET';
+  if (!player.devCards.includes(card)) return 'CARD_NOT_IN_HAND';
+  if (playableCount(state, playerId, card) < 1) return 'CARD_BOUGHT_THIS_TURN';
+  return null;
+};
+
 const validateMoveRobber = (state: ReadonlyGameState, hex: HexId): ErrorCode | null => {
   if (state.phase.kind !== 'moveRobber') return 'WRONG_PHASE';
   if (!state.board.hexes[hex]) return 'INVALID_TARGET';
@@ -198,6 +221,24 @@ export const validateAction = (
       if (!player) return 'INVALID_TARGET';
       return canAfford(player.resources, COSTS.devCard) ? null : 'INSUFFICIENT_RESOURCES';
     }
+    case 'playKnight':
+      return validatePlayCard(state, playerId, 'knight');
+
+    case 'playYearOfPlenty': {
+      const error = validatePlayCard(state, playerId, 'yearOfPlenty');
+      if (error !== null) return error;
+      // All or nothing: the bank has to cover both cards, two of the same
+      // resource included. Unlike production, this one is not paid in part.
+      const wanted = emptyBundle();
+      for (const resource of action.resources) wanted[resource] += 1;
+      return RESOURCES.every((resource) => state.bank[resource] >= wanted[resource])
+        ? null
+        : 'INSUFFICIENT_RESOURCES';
+    }
+
+    case 'playMonopoly':
+      return validatePlayCard(state, playerId, 'monopoly');
+
     case 'maritimeTrade': {
       if (state.phase.kind !== 'main') return 'WRONG_PHASE';
       const player = playerOf(state, playerId);
