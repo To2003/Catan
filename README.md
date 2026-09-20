@@ -138,6 +138,16 @@ fly deploy
 4. **Add Volume** montado en `/data`. Sin volumen, cada deploy arranca sin salas.
 5. Copiar el dominio público que queda (`https://algo.up.railway.app`).
 
+> **Vercel es solo para el front.** No mantiene WebSockets abiertos, así que el server no
+> puede vivir ahí. Si en el log del build de Vercel ves `/vercel/path0/apps/server` y
+> `tsup`, el **Root Directory del proyecto está mal**: tiene que ser `apps/web`.
+>
+> Ese build además falla con errores de TypeScript que no tienen nada que ver
+> (`Property 'error' does not exist on type 'ApplyResult'`, campos de zod marcados como
+> opcionales): son el síntoma de compilar sin nuestro `tsconfig`, es decir sin
+> `strictNullChecks`, del que depende la inferencia de zod. `apps/server/src/schema.ts`
+> tiene un chequeo que lo dice con todas las letras.
+
 ### 2. Front en Vercel
 
 1. **Add New → Project**, importar el repo.

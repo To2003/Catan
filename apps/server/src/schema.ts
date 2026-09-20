@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { EdgeId, HexId, ResourceBundle, VertexId } from '@tierra-austral/engine';
+import type { Action, EdgeId, HexId, ResourceBundle, VertexId } from '@tierra-austral/engine';
 
 /**
  * The shape of every inbound message.
@@ -18,6 +18,19 @@ import type { EdgeId, HexId, ResourceBundle, VertexId } from '@tierra-austral/en
  * cannot satisfy. The regex is what makes the cast honest: nothing reaches the
  * engine without matching the shape first.
  */
+/**
+ * A tripwire for a compiler running without `strictNullChecks`.
+ *
+ * zod's inference depends on it: with it off, `addQuestionMarks` marks *every*
+ * property optional and every schema in this file silently describes the wrong
+ * shape. A deploy that compiled the server without our tsconfig failed here
+ * with three screens of unrelated-looking errors; this one says what happened.
+ */
+type StrictNullChecksRequired = undefined extends string
+  ? 'This project requires strictNullChecks: zod infers the wrong types without it'
+  : true;
+export const STRICT_NULL_CHECKS_REQUIRED: StrictNullChecksRequired = true;
+
 const vertexId = z
   .string()
   .regex(/^v\d{1,3}$/, 'vertex id')
@@ -55,7 +68,18 @@ const bundle = z
       ) as Partial<ResourceBundle>,
   );
 
-export const actionSchema = z.discriminatedUnion('type', [
+/**
+ * Pinned to the engine's own `Action` union rather than left to inference.
+ *
+ * Two reasons, and the second one cost a failed deploy. First, a schema that
+ * drifts from the union — a field renamed, a new action — now fails to compile
+ * instead of quietly accepting the wrong shape. Second, zod's inference depends
+ * on `strictNullChecks`: a toolchain that compiles this file without our
+ * tsconfig infers every property as optional and the whole file stops
+ * typechecking. Declaring the type makes the schema say what it means under any
+ * compiler options.
+ */
+export const actionSchema: z.ZodType<Action> = z.discriminatedUnion('type', [
   z.object({ type: z.literal('placeSettlement'), vertex: vertexId }).strict(),
   z.object({ type: z.literal('placeRoad'), edge: edgeId }).strict(),
   z.object({ type: z.literal('upgradeCity'), vertex: vertexId }).strict(),
