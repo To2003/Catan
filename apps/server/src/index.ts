@@ -8,10 +8,12 @@ import { HEX_COUNT } from '@tierra-austral/engine';
 import { registerHandlers, type GameServer } from './handlers.js';
 import { MAX_MESSAGE_BYTES } from './limits.js';
 import { registerDevRoutes } from './devRoutes.js';
+import { originPolicy } from './origins.js';
 import { sqliteStore } from './persistence.js';
 import { restoreRooms, sweepIdleRooms, useStore } from './rooms.js';
 
 const PORT = Number(process.env['PORT'] ?? 3001);
+/** Only used to build the fixture links; the CORS answer comes from originPolicy. */
 const WEB_ORIGIN = process.env['WEB_ORIGIN'] ?? 'http://localhost:5173';
 /** Where the games live between restarts. */
 const DB_PATH = process.env['DB_PATH'] ?? './data/tierra-austral.db';
@@ -19,8 +21,17 @@ const DB_PATH = process.env['DB_PATH'] ?? './data/tierra-austral.db';
 const ROOM_TTL_MS = 24 * 60 * 60 * 1000;
 const SWEEP_EVERY_MS = 60 * 60 * 1000;
 
+const production = process.env['NODE_ENV'] === 'production';
+const origins = originPolicy(process.env['WEB_ORIGIN'], production);
+
 const app = express();
-app.use(cors({ origin: WEB_ORIGIN }));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      callback(null, origins.allows(origin));
+    },
+  }),
+);
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, hexes: HEX_COUNT });
@@ -35,7 +46,11 @@ if (registerDevRoutes(app, WEB_ORIGIN)) {
 const httpServer = createServer(app);
 
 const io: GameServer = new Server(httpServer, {
-  cors: { origin: WEB_ORIGIN },
+  cors: {
+    origin: (origin, callback) => {
+      callback(null, origins.allows(origin));
+    },
+  },
   // A client cannot make the server allocate more than this per message.
   maxHttpBufferSize: MAX_MESSAGE_BYTES,
 });
@@ -57,6 +72,20 @@ sweep.unref();
 
 registerHandlers(io);
 
+// A stale server holding the port is the confusing version of this failure:
+// the browser then gets a CORS error from somebody else's process.
+httpServer.on('error', (error: NodeJS.ErrnoException) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(
+      `port ${PORT} is already taken — another server is still running. ` +
+        `Stop it (lsof -ti:${PORT} | xargs kill) or set PORT to something else.`,
+    );
+    process.exit(1);
+  }
+  throw error;
+});
+
 httpServer.listen(PORT, () => {
   console.log(`server listening on http://localhost:${PORT}`);
+  console.log(`browsers allowed from: ${origins.describe()}`);
 });

@@ -52,8 +52,10 @@ Abrí **tres ventanas de incógnito** (no tres pestañas de la misma ventana: co
 3. Cada una elige color y marca **Estoy listo**.
 4. El host toca **Arrancar**.
 
-Si cambiás el puerto de la web, el server necesita `WEB_ORIGIN` apuntando ahí o el
-navegador bloquea el socket por CORS.
+Fuera de producción el server acepta **cualquier puerto de localhost**, así que cambiar el
+puerto de la web no rompe nada. Si la página se queda en "Conectando…", casi siempre es que
+quedó **otro server viejo ocupando el 3001**: el arranque ahora lo dice con todas las letras,
+y `lsof -ti:3001 | xargs kill` lo resuelve.
 
 ### Ver el final de una partida sin jugarla
 
