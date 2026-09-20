@@ -1,0 +1,25 @@
+# Render blueprint: the server, on the free plan.
+#
+# Free means no credit card, and it also means the service sleeps after 15
+# minutes with no traffic and wakes in about a minute when somebody connects.
+# There is no persistent disk on this plan, so a game only lives as long as the
+# service stays awake — which, while people are playing, it does: an open
+# WebSocket counts as traffic.
+services:
+  - type: web
+    name: tierra-austral
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # The front end's URL. Without it the browser refuses the socket.
+      - key: WEB_ORIGIN
+        value: https://to2003-catan.vercel.app
+      # Writable but ephemeral on the free plan: rooms are lost when it sleeps.
+      - key: DB_PATH
+        value: /tmp/tierra-austral.db

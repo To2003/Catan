@@ -116,7 +116,30 @@ mantiene WebSockets abiertos.
 El orden importa: primero el server (para tener su URL), después el front (que la necesita),
 y al final se vuelve al server a corregir `WEB_ORIGIN` con la URL real del front.
 
-### 1. Server en Fly.io
+### 1. Server en Render (gratis, sin tarjeta)
+
+La opción sin costo. El repo trae [`render.yaml`](./render.yaml), así que alcanza con:
+
+1. **New → Blueprint** en Render, conectar el repo y aceptar lo que propone el archivo.
+2. Editar `WEB_ORIGIN` si tu front no está en la URL que quedó escrita ahí.
+3. Copiar la URL pública (`https://algo.onrender.com`) para `VITE_SERVER_URL`.
+
+Lo que hay que saber del plan gratis, con la letra chica de su doc:
+
+- **Se duerme a los 15 minutos sin tráfico** y tarda **cerca de un minuto** en despertar. El
+  primero que entra espera; los demás ya lo encuentran despierto. Un WebSocket abierto cuenta
+  como tráfico, así que mientras están jugando no se duerme.
+- **No hay disco persistente**: la base vive en `/tmp` y se pierde cuando el servicio se
+  duerme o se redespliega. En la práctica: si todos se van 15 minutos, esa sala desaparece y
+  hay que crear otra. Las partidas en curso no se cortan.
+- **750 horas gratis por mes** por workspace, y las horas dormido no cuentan.
+
+### 1-bis. Server en Fly.io (pago, siempre encendido)
+
+Si querés que no se duerma nunca y que las partidas sobrevivan a un reinicio, Fly con un
+volumen sale unos **$2,20 por mes** (máquina `shared-cpu-1x` de 256 MB a $2,02 + $0,15 por GB
+de volumen) y **pide tarjeta**. El trial gratis no alcanza: son 2 horas de máquina encendida y
+apaga las máquinas a los 5 minutos.
 
 ```bash
 fly launch --no-deploy            # usa el Dockerfile y el fly.toml del repo
