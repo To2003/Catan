@@ -139,24 +139,37 @@ fly deploy
 5. Copiar el dominio público que queda (`https://algo.up.railway.app`).
 
 > **Vercel es solo para el front.** No mantiene WebSockets abiertos, así que el server no
-> puede vivir ahí. Si en el log del build de Vercel ves `/vercel/path0/apps/server` y
-> `tsup`, el **Root Directory del proyecto está mal**: tiene que ser `apps/web`.
+> puede vivir ahí.
 >
-> Ese build además falla con errores de TypeScript que no tienen nada que ver
-> (`Property 'error' does not exist on type 'ApplyResult'`, campos de zod marcados como
-> opcionales): son el síntoma de compilar sin nuestro `tsconfig`, es decir sin
-> `strictNullChecks`, del que depende la inferencia de zod. `apps/server/src/schema.ts`
-> tiene un chequeo que lo dice con todas las letras.
+> Si en el log del build ves `/vercel/path0/apps/server`, `tsup`, o errores de TypeScript
+> como `Property 'error' does not exist on type 'ApplyResult'`, el proyecto está
+> compilando el **server**. Esos errores no son del código: aparecen al compilar sin
+> nuestro `tsconfig`, o sea sin `strictNullChecks`, del que depende la inferencia de zod
+> (`apps/server/src/schema.ts` tiene un chequeo que lo dice con todas las letras).
+>
+> La solución es que Vercel no toque el server. El `vercel.json` de la raíz ya lo
+> resuelve: **dejá el Root Directory vacío** (la raíz del repo) y borrá cualquier Build
+> Command o Output Directory que hayas puesto a mano en el dashboard. El archivo manda.
 
 ### 2. Front en Vercel
 
 1. **Add New → Project**, importar el repo.
-2. Framework preset: **Vite**.
-3. Root directory: `apps/web`.
-4. Build command: `pnpm install && pnpm --filter @tierra-austral/web build`
-   (desde la raíz del monorepo; Vercel corre el install por su cuenta).
-5. Output directory: `dist`.
-6. Variable de entorno: `VITE_SERVER_URL` con la URL del server del paso 1.
+2. **Root Directory: vacío** (la raíz del repo). El [`vercel.json`](./vercel.json) de la raíz ya
+   define framework, install, build y output:
+
+   ```json
+   {
+     "framework": "vite",
+     "installCommand": "pnpm install --frozen-lockfile",
+     "buildCommand": "pnpm --filter @tierra-austral/web build",
+     "outputDirectory": "apps/web/dist"
+   }
+   ```
+
+   Si el dashboard tiene overrides de Build Command u Output Directory, borralos: pisan al
+   archivo y son la forma más fácil de terminar buildeando el paquete equivocado.
+
+3. Variable de entorno: `VITE_SERVER_URL` con la URL del server del paso 1.
 
 Ojo: `VITE_SERVER_URL` se **hornea en el bundle** en tiempo de build. Si cambia, hay que
 volver a buildear el front, no alcanza con cambiar la variable.
