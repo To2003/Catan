@@ -11,22 +11,22 @@ import {
 } from '@tierra-austral/engine';
 import { Board } from '../components/board/Board.js';
 import { DevCardPanel } from '../components/DevCardPanel.js';
-import { DiscardModal } from '../components/DiscardModal.js';
 import { ResourceChoiceModal } from '../components/ResourceChoiceModal.js';
 import { OfferPanel } from '../components/OfferPanel.js';
 import { TradePanel } from '../components/TradePanel.js';
 import { Chat } from '../components/Chat.js';
+import { Hand } from '../components/cards/Hand.js';
 import { FlyingCards } from '../components/effects/FlyingCards.js';
 import { RollOverlay } from '../components/effects/RollOverlay.js';
 import { Toasts } from '../components/effects/Toasts.js';
-import { TurnBanner } from '../components/TurnBanner.js';
+import { TurnBanner, waitingFor } from '../components/TurnBanner.js';
 import { EventLog } from '../components/EventLog.js';
 import { PlayerList } from '../components/PlayerList.js';
 import { RobberHint } from '../components/RobberHint.js';
 import { DiceRoll } from '../components/DiceRoll.js';
 import { isMuted, setMuted, sounds } from '../lib/sounds.js';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
-import { RESOURCE_ICONS, RESOURCE_LABELS, TERRAIN_STYLES } from '../lib/terrainStyles.js';
+import { RESOURCE_ICONS, TERRAIN_STYLES } from '../lib/terrainStyles.js';
 import { SPEED_LABELS, speedScale, type AnimationSpeed } from '../lib/animation.js';
 import { useGame } from '../store/gameStore.js';
 import { readDebugFromUrl } from '../lib/seed.js';
@@ -64,6 +64,18 @@ export function GameScreen() {
   const [hoveredRoute, setHoveredRoute] = useState<PlayerId | undefined>(undefined);
   /** Whose buildings to ring, while picking somebody to rob. */
   const [hoveredVictim, setHoveredVictim] = useState<PlayerId | undefined>(undefined);
+  /**
+   * Cards picked from the hand. One selection serves both jobs it can have —
+   * paying a discard and building an offer — because you are never doing both
+   * at once.
+   */
+  const [picked, setPicked] = useState<Partial<ResourceBundle>>({});
+  const [tab, setTab] = useState<'comercio' | 'chat' | 'registro'>('comercio');
+  /**
+   * How many messages had arrived when the chat tab was last open; unread is a
+   * subtraction from that.
+   */
+  const [chatSeen, setChatSeen] = useState(0);
 
   // A ticking clock, so the force-turn button lights up on its own rather than
   // reading the wall clock while rendering. The server is the one that enforces
@@ -157,12 +169,27 @@ export function GameScreen() {
     [choosing, send],
   );
 
-  const onDiscard = useCallback(
-    (cards: Partial<ResourceBundle>) => {
-      send({ type: 'discard', cards });
+  const togglePicked = useCallback(
+    (resource: Resource) => {
+      setPicked((current) => {
+        const held = view?.me.resources[resource] ?? 0;
+        const next = (current[resource] ?? 0) + 1;
+        // Clicking past the last copy wraps around to none, so a mis-click is
+        // one more click to undo rather than a hunt for a minus button.
+        return { ...current, [resource]: next > held ? 0 : next };
+      });
     },
-    [send],
+    [view],
   );
+
+  const clearPicked = useCallback(() => {
+    setPicked({});
+  }, []);
+
+  const onDiscard = useCallback(() => {
+    send({ type: 'discard', cards: picked });
+    setPicked({});
+  }, [picked, send]);
 
   const myTurn = view?.currentPlayer === view?.you;
 
@@ -183,15 +210,6 @@ export function GameScreen() {
 
   // How many rolls have been seen, so the dice replay their tumble each time.
   const rolls = events.filter((event) => event.type === 'DiceRolled').length;
-  // What the last production gave this player, to flash the counters.
-  const lastGain = [...events]
-    .reverse()
-    .find((event) => event.type === 'ResourcesProduced' || event.type === 'SetupResourcesGranted');
-  const gained = new Set(
-    lastGain?.type === 'ResourcesProduced' || lastGain?.type === 'SetupResourcesGranted'
-      ? lastGain.grants.filter((grant) => grant.player === view.you).map((grant) => grant.resource)
-      : [],
-  );
 
   /** The buildings worth pointing at right now: a robbery's victims, or a target's. */
   const markedVertices = (() => {
@@ -243,31 +261,12 @@ export function GameScreen() {
   }
 
   const isMyTurn = view.currentPlayer === view.you;
+  const pickedTotal = RESOURCES.reduce((sum, resource) => sum + (picked[resource] ?? 0), 0);
+  const unreadChat = tab === 'chat' ? 0 : Math.max(0, chat.length - chatSeen);
   const owed = view.legalMoves.discardOwed;
   const blocked = room?.blockedBy;
   const canForce =
     room?.hostId === view.you && blocked !== undefined && now - blocked.since > FORCE_TURN_HINT_MS;
-
-  const phaseText = (): string => {
-    switch (view.phase.kind) {
-      case 'setup':
-        return `Setup ${view.phase.round}: ${view.phase.step === 'settlement' ? 'asentamiento' : 'camino'}`;
-      case 'preRoll':
-        return 'Antes de tirar';
-      case 'discard':
-        return 'Descarte';
-      case 'moveRobber':
-        return 'Mover el ladrón';
-      case 'steal':
-        return 'Elegir a quién robarle';
-      case 'roadBuilding':
-        return `Caminos gratis: ${view.phase.remaining}`;
-      case 'main':
-        return 'Turno principal';
-      default:
-        return view.phase.kind;
-    }
-  };
 
   return (
     <main
@@ -275,12 +274,10 @@ export function GameScreen() {
         isMyTurn && scale > 0 ? 'turn-glow' : ''
       }`}
     >
-      <header className="flex flex-wrap items-center gap-3 border-b border-stone-700 px-4 py-2">
-        <h1 className="text-lg font-bold tracking-tight">Tierra Austral</h1>
-        <span className="rounded bg-stone-800 px-2 py-1 font-mono text-xs">{room?.code}</span>
-        <span className="rounded bg-stone-800 px-2 py-1 text-xs">{phaseText()}</span>
-        <span className="rounded bg-stone-800 px-2 py-1 text-xs">
-          {isMyTurn ? 'Es tu turno' : `Juega ${nameOf(view.currentPlayer)}`}
+      <header className="flex flex-wrap items-center gap-3 border-b border-chapa px-4 py-2">
+        <h1 className="font-display text-xl tracking-tight text-guanaco">Tierra Austral</h1>
+        <span className="font-display rounded-panel bg-chapa px-2 py-1 text-sm tracking-[0.2em]">
+          {room?.code}
         </span>
         <DiceRoll dice={view.lastRoll} roll={rolls} />
         {error ? (
@@ -288,45 +285,14 @@ export function GameScreen() {
         ) : null}
 
         <div className="ml-auto flex items-center gap-2">
-          {blocked ? (
-            <button
-              type="button"
-              disabled={!canForce}
-              onClick={forceTurn}
-              title={canForce ? '' : 'Hay que esperar 2 minutos'}
-              className="rounded bg-stone-700 px-3 py-1.5 text-sm font-semibold hover:bg-stone-600 disabled:opacity-30"
-            >
-              Forzar turno de {nameOf(blocked.playerId)}
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => {
-              send({ type: 'rollDice' });
-            }}
-            disabled={!view.legalMoves.canRoll}
-            className="rounded bg-stone-100 px-3 py-1.5 text-sm font-semibold text-stone-900 disabled:opacity-30"
-          >
-            Tirar dados
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              send({ type: 'endTurn' });
-            }}
-            disabled={!view.legalMoves.canEndTurn}
-            className="rounded bg-stone-100 px-3 py-1.5 text-sm font-semibold text-stone-900 disabled:opacity-30"
-          >
-            Terminar turno
-          </button>
-          <label className="flex items-center gap-1 text-[11px] text-stone-400">
+          <label className="flex items-center gap-1 text-[11px] text-guanaco-apagado">
             <span className="sr-only">Velocidad de las animaciones</span>
             <select
               value={animation}
               onChange={(event) => {
                 setAnimation(event.target.value as AnimationSpeed);
               }}
-              className="rounded bg-stone-700 px-1 py-1 text-xs"
+              className="rounded-panel bg-chapa px-1 py-1 text-xs"
             >
               {(['normal', 'fast', 'off'] as const).map((speed) => (
                 <option key={speed} value={speed}>
@@ -344,7 +310,7 @@ export function GameScreen() {
               setMuted(next);
               setMutedState(next);
             }}
-            className="rounded bg-stone-700 px-2 py-1.5 text-sm hover:bg-stone-600"
+            className="rounded-panel bg-chapa px-2 py-1.5 text-sm hover:bg-chapa-alta"
           >
             {muted ? '🔇' : '🔊'}
           </button>
@@ -353,7 +319,7 @@ export function GameScreen() {
 
       <TurnBanner view={view} nameOf={nameOf} />
 
-      <div className="relative flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
         {roll ? (
           <RollOverlay
             dice={roll.dice}
@@ -365,9 +331,6 @@ export function GameScreen() {
         <Toasts effects={effects} hexLabel={hexLabel} />
         <FlyingCards effects={effects} colorOf={colorOf} scale={scale} />
 
-        {owed !== undefined ? (
-          <DiscardModal player={view.me} owed={owed} onConfirm={onDiscard} />
-        ) : null}
         {choosing ? (
           <ResourceChoiceModal
             title={choosing === 'monopoly' ? 'Monopolio: elegí un recurso' : 'Año de abundancia'}
@@ -380,11 +343,47 @@ export function GameScreen() {
         ) : null}
 
         <section
-          className="min-h-0 flex-1 p-2"
+          className="relative min-h-[46vh] flex-1 p-2 pb-28"
           onMouseMove={(event) => {
             if (hoveredHex !== undefined) setPointer({ x: event.clientX, y: event.clientY });
           }}
         >
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-1">
+            {owed !== undefined ? (
+              <div className="pointer-events-auto flex items-center gap-3 rounded-panel bg-lenga px-3 py-1.5 text-sm shadow-lg">
+                <span className="font-semibold">
+                  Descartá {owed} carta{owed === 1 ? '' : 's'} — elegiste {pickedTotal}
+                </span>
+                <button
+                  type="button"
+                  disabled={pickedTotal !== owed}
+                  onClick={onDiscard}
+                  className="rounded-panel bg-guanaco px-2 py-1 text-xs font-semibold text-noche disabled:opacity-40"
+                >
+                  Descartar
+                </button>
+              </div>
+            ) : pickedTotal > 0 ? (
+              <div className="pointer-events-auto flex items-center gap-3 rounded-panel bg-chapa px-3 py-1 text-xs shadow-lg">
+                <span>Elegiste {pickedTotal} para ofertar</span>
+                <button
+                  type="button"
+                  onClick={clearPicked}
+                  className="rounded-panel bg-chapa-alta px-2 py-0.5 font-semibold"
+                >
+                  Soltar
+                </button>
+              </div>
+            ) : null}
+
+            <Hand
+              hand={view.me.resources}
+              selected={picked}
+              onToggle={togglePicked}
+              selectable={owed !== undefined || (isMyTurn && view.phase.kind === 'main')}
+            />
+          </div>
+
           <Board
             board={view.board}
             robberHex={view.robberHex}
@@ -414,11 +413,89 @@ export function GameScreen() {
           <RobberHint view={view} hex={hoveredHex} at={pointer} nameOf={nameOf} />
         ) : null}
 
-        <aside className="flex w-80 min-w-80 flex-col gap-3 overflow-y-auto border-l border-stone-700 p-3 text-sm">
-          <div>
-            <h2 className="mb-1 text-xs font-bold tracking-widest text-stone-400 uppercase">
-              Jugadores
-            </h2>
+        <aside className="flex w-full flex-col gap-3 overflow-y-auto border-t border-chapa bg-noche p-3 text-sm lg:w-[21rem] lg:min-w-[21rem] lg:border-t-0 lg:border-l">
+          {/* 1. What the game is waiting for, and the buttons that answer it. */}
+          <section className="rounded-panel bg-chapa p-2">
+            <p className="font-display text-[15px] leading-tight">{waitingFor(view, nameOf)}</p>
+
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  send({ type: 'rollDice' });
+                }}
+                disabled={!view.legalMoves.canRoll}
+                className="rounded-panel bg-estepa px-3 py-1.5 text-sm font-semibold text-noche disabled:bg-chapa-alta disabled:text-guanaco-apagado"
+              >
+                Tirar dados
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  send({ type: 'endTurn' });
+                }}
+                disabled={!view.legalMoves.canEndTurn}
+                className="rounded-panel bg-guanaco px-3 py-1.5 text-sm font-semibold text-noche disabled:bg-chapa-alta disabled:text-guanaco-apagado"
+              >
+                Terminar turno
+              </button>
+              {blocked ? (
+                <button
+                  type="button"
+                  disabled={!canForce}
+                  onClick={forceTurn}
+                  title={canForce ? '' : 'Hay que esperar 2 minutos'}
+                  className="rounded-panel bg-chapa-alta px-2 py-1.5 text-xs font-semibold disabled:opacity-40"
+                >
+                  Forzar turno de {nameOf(blocked.playerId)}
+                </button>
+              ) : null}
+            </div>
+
+            {view.legalMoves.stealTargets.length > 0 ? (
+              <div className="mt-2">
+                <p className="text-[11px] text-guanaco-apagado">A quién le robás</p>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {view.legalMoves.stealTargets.map((target) => {
+                    const victim = view.players.find((player) => player.id === target);
+                    return (
+                      <button
+                        key={target}
+                        type="button"
+                        onClick={() => {
+                          send({ type: 'steal', target });
+                        }}
+                        onMouseEnter={() => {
+                          setHoveredVictim(target);
+                        }}
+                        onMouseLeave={() => {
+                          setHoveredVictim(undefined);
+                        }}
+                        onFocus={() => {
+                          setHoveredVictim(target);
+                        }}
+                        onBlur={() => {
+                          setHoveredVictim(undefined);
+                        }}
+                        className="rounded-panel bg-lenga px-2 py-1 text-xs font-semibold"
+                      >
+                        {nameOf(target)} · {victim?.resourceCount ?? 0} cartas
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            <p className="mt-2 text-[11px] text-guanaco-apagado">
+              Te quedan {view.me.stock.roads} caminos · {view.me.stock.settlements} pueblos ·{' '}
+              {view.me.stock.cities} ciudades
+            </p>
+          </section>
+
+          {/* 2. Who is playing. */}
+          <section>
+            <h2 className="mb-1 text-[13px] font-semibold text-guanaco">Jugadores</h2>
             <PlayerList
               view={view}
               connected={(id) =>
@@ -427,120 +504,92 @@ export function GameScreen() {
               onHoverRoute={setHoveredRoute}
               gains={gains}
             />
-          </div>
+          </section>
 
-          {view.legalMoves.stealTargets.length > 0 ? (
-            <div>
-              <h2 className="mb-1 text-xs font-bold tracking-widest text-stone-400 uppercase">
-                Robarle a
-              </h2>
-              <div className="flex flex-wrap gap-2">
-                {view.legalMoves.stealTargets.map((target) => {
-                  const victim = view.players.find((player) => player.id === target);
-                  return (
-                    <button
-                      key={target}
-                      type="button"
-                      onClick={() => {
-                        send({ type: 'steal', target });
-                      }}
-                      // Hovering a name rings that player's buildings, so you
-                      // can see who you are about to rob before you do it.
-                      onMouseEnter={() => {
-                        setHoveredVictim(target);
-                      }}
-                      onMouseLeave={() => {
-                        setHoveredVictim(undefined);
-                      }}
-                      onFocus={() => {
-                        setHoveredVictim(target);
-                      }}
-                      onBlur={() => {
-                        setHoveredVictim(undefined);
-                      }}
-                      className="rounded bg-stone-100 px-2 py-1 text-xs font-semibold text-stone-900"
-                    >
-                      {nameOf(target)} · {victim?.resourceCount ?? 0} 🂠
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-
-          <div>
-            <h2 className="mb-1 text-xs font-bold tracking-widest text-stone-400 uppercase">
-              Tu mano
-            </h2>
-            <ul className="grid grid-cols-5 gap-1 text-center font-mono text-xs">
-              {RESOURCES.map((resource) => (
-                <li
-                  key={`${resource}-${gained.has(resource) ? rolls : 0}`}
-                  className={`rounded bg-stone-800 px-1 py-1 ${gained.has(resource) ? 'gain-flash' : ''}`}
+          {/* 3. Everything that can wait, behind tabs. */}
+          <section className="flex min-h-0 flex-1 flex-col">
+            <div className="mb-2 flex gap-1">
+              {(['comercio', 'chat', 'registro'] as const).map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => {
+                    setTab(name);
+                    if (name === 'chat') setChatSeen(chat.length);
+                  }}
+                  className={`flex-1 rounded-panel px-2 py-1 text-xs font-semibold capitalize ${
+                    tab === name ? 'bg-chapa-alta text-guanaco' : 'bg-chapa text-guanaco-apagado'
+                  }`}
                 >
-                  <div className="text-[10px] text-stone-400">{RESOURCE_LABELS[resource]}</div>
-                  <div className="text-base">{view.me.resources[resource]}</div>
-                </li>
+                  {name}
+                  {name === 'chat' && unreadChat > 0 ? (
+                    <span className="ml-1 rounded-full bg-estepa px-1 text-[10px] text-noche">
+                      {unreadChat}
+                    </span>
+                  ) : null}
+                </button>
               ))}
-            </ul>
-            <p className="mt-1 text-xs text-stone-400">
-              Piezas: {view.me.stock.roads} caminos · {view.me.stock.settlements} asentamientos ·{' '}
-              {view.me.stock.cities} ciudades
-            </p>
-          </div>
+            </div>
 
-          <DevCardPanel
-            hand={view.me.devCards}
-            deckLeft={view.devDeckCount}
-            moves={view.legalMoves}
-            onBuy={() => {
-              send({ type: 'buyDevCard' });
-            }}
-            onPlay={onPlayCard}
-          />
+            {tab === 'comercio' ? (
+              <div className="flex flex-col gap-3">
+                <DevCardPanel
+                  hand={view.me.devCards}
+                  deckLeft={view.devDeckCount}
+                  moves={view.legalMoves}
+                  onBuy={() => {
+                    send({ type: 'buyDevCard' });
+                  }}
+                  onPlay={onPlayCard}
+                />
 
-          <OfferPanel
-            you={view.you}
-            hand={view.me.resources}
-            offers={view.tradeOffers}
-            moves={view.legalMoves}
-            nameOf={nameOf}
-            players={view.players.map((player) => ({ id: player.id, name: player.name }))}
-            onCreate={(give, want, to) => {
-              send({ type: 'createOffer', give, want, to });
-            }}
-            onRespond={(offerId, response) => {
-              send({ type: 'respondOffer', offerId, response });
-            }}
-            onCounter={(offerId, give, want) => {
-              send({ type: 'counterOffer', offerId, give, want });
-            }}
-            onConfirm={(offerId, withPlayer) => {
-              send({ type: 'confirmTrade', offerId, withPlayer });
-            }}
-            onCancel={(offerId) => {
-              send({ type: 'cancelOffer', offerId });
-            }}
-          />
+                <OfferPanel
+                  you={view.you}
+                  hand={view.me.resources}
+                  give={picked}
+                  onClearGive={clearPicked}
+                  offers={view.tradeOffers}
+                  moves={view.legalMoves}
+                  nameOf={nameOf}
+                  players={view.players.map((player) => ({ id: player.id, name: player.name }))}
+                  onCreate={(give, want, to) => {
+                    send({ type: 'createOffer', give, want, to });
+                  }}
+                  onRespond={(offerId, response) => {
+                    send({ type: 'respondOffer', offerId, response });
+                  }}
+                  onCounter={(offerId, give, want) => {
+                    send({ type: 'counterOffer', offerId, give, want });
+                  }}
+                  onConfirm={(offerId, withPlayer) => {
+                    send({ type: 'confirmTrade', offerId, withPlayer });
+                  }}
+                  onCancel={(offerId) => {
+                    send({ type: 'cancelOffer', offerId });
+                  }}
+                />
 
-          <TradePanel
-            rates={view.legalMoves.maritimeRates}
-            hand={view.me.resources}
-            bank={view.bank}
-            enabled={view.phase.kind === 'main'}
-            onTrade={(give, want) => {
-              send({ type: 'maritimeTrade', give, want });
-            }}
-          />
-
-          <Chat messages={chat} nameOf={nameOf} colorOf={colorOf} onSend={sendChat} />
-
-          <EventLog
-            events={events}
-            you={view.you}
-            context={{ nameOf, hexLabel }}
-            debug={debugLog}
-          />
+                <TradePanel
+                  rates={view.legalMoves.maritimeRates}
+                  hand={view.me.resources}
+                  bank={view.bank}
+                  enabled={view.phase.kind === 'main'}
+                  onTrade={(give, want) => {
+                    send({ type: 'maritimeTrade', give, want });
+                  }}
+                />
+              </div>
+            ) : tab === 'chat' ? (
+              <Chat messages={chat} nameOf={nameOf} colorOf={colorOf} onSend={sendChat} />
+            ) : (
+              <EventLog
+                events={events}
+                you={view.you}
+                context={{ nameOf, hexLabel }}
+                debug={debugLog}
+              />
+            )}
+          </section>
         </aside>
       </div>
     </main>

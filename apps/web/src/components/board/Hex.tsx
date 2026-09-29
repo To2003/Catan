@@ -1,5 +1,6 @@
 import type { BoardGraph, Hex as HexModel } from '@tierra-austral/engine';
 import { TERRAIN_STYLES } from '../../lib/terrainStyles.js';
+import { TERRAIN_PATTERN_ID } from './TerrainPatterns.js';
 
 interface HexProps {
   readonly hex: HexModel;
@@ -29,6 +30,12 @@ export function Hex({ hex, board, pulsing = false }: HexProps) {
         fill={style.fill}
         stroke={style.stroke}
         strokeWidth={0.03}
+      />
+      {/* The material on top of the colour: see TerrainPatterns. */}
+      <polygon
+        points={corners.join(' ')}
+        fill={`url(#${TERRAIN_PATTERN_ID[hex.terrain]})`}
+        pointerEvents="none"
       />
       {pulsing ? (
         <polygon

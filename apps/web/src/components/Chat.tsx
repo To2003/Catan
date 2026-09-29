@@ -35,9 +35,9 @@ export function Chat({ messages, nameOf, colorOf, onSend }: ChatProps) {
             return !current;
           });
         }}
-        className="mb-1 flex w-full items-center gap-2 text-xs font-bold tracking-widest text-stone-400 uppercase"
+        className="mb-1 flex w-full items-center gap-2 text-[13px] font-semibold text-guanaco"
       >
-        <span>Chat</span>
+        <span>Mensajes</span>
         {unread > 0 ? (
           <span className="rounded-full bg-amarillo px-1.5 text-[10px] font-bold text-stone-900">
             {unread}

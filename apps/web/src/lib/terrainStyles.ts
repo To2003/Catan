@@ -9,13 +9,18 @@ interface TerrainStyle {
   readonly label: string;
 }
 
+/**
+ * Terrain colours, pulled towards the palette in DESIGN.md: the greens go
+ * colder and greyer the way southern vegetation does, the fields keep the dry
+ * ochre of the steppe, and the rock is basalt rather than neutral grey.
+ */
 export const TERRAIN_STYLES: Record<Terrain, TerrainStyle> = {
-  forest: { fill: '#2f5d3a', stroke: '#1d3b25', label: 'Bosque' },
-  hills: { fill: '#a85432', stroke: '#6f3620', label: 'Colinas' },
-  pasture: { fill: '#7cab52', stroke: '#52733a', label: 'Pastizal' },
-  fields: { fill: '#e0b23f', stroke: '#9c7a26', label: 'Campos' },
-  mountains: { fill: '#7b8794', stroke: '#4d565f', label: 'Montañas' },
-  desert: { fill: '#ddc9a3', stroke: '#a8926f', label: 'Desierto' },
+  forest: { fill: '#2b5138', stroke: '#17301f', label: 'Bosque' },
+  hills: { fill: '#9c4b2c', stroke: '#65301b', label: 'Colinas' },
+  pasture: { fill: '#6d9250', stroke: '#47623a', label: 'Pastizal' },
+  fields: { fill: '#cfa43a', stroke: '#8d7024', label: 'Campos' },
+  mountains: { fill: '#6c7c8b', stroke: '#414e5a', label: 'Montañas' },
+  desert: { fill: '#d6c09a', stroke: '#a08a66', label: 'Desierto' },
 };
 
 export const RESOURCE_LABELS: Record<Resource, string> = {

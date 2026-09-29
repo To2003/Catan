@@ -13,6 +13,7 @@ import { Hex } from './Hex.js';
 import { NumberToken } from './NumberToken.js';
 import { Port } from './Port.js';
 import { Robber } from './Robber.js';
+import { TerrainPatterns } from './TerrainPatterns.js';
 
 /** Everything the hot-seat adds on top of a plain board: pieces and legal spots. */
 export interface BoardInteraction {
@@ -64,6 +65,7 @@ export function Board({ board, robberHex, debug, interaction }: BoardProps) {
       role="img"
       aria-label="Tablero"
     >
+      <TerrainPatterns />
       <g>
         {board.ports.map((port) => (
           <Port key={port.edge} port={port} board={board} />

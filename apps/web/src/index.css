@@ -1,10 +1,42 @@
 @import 'tailwindcss';
 
+/* The tokens from DESIGN.md. The background is a cold Patagonian night rather
+   than a tinted black, so the ochres and reds read warm against it. */
 @theme {
-  --color-celeste: #5aa9e6;
-  --color-bordo: #8c2f39;
-  --color-verde: #4c956c;
-  --color-amarillo: #e8c547;
+  --color-noche: #141c24;
+  --color-chapa: #26323d;
+  --color-chapa-alta: #33414e;
+  --color-estepa: #c9a227;
+  --color-lenga: #9e2b25;
+  --color-glaciar: #6fa8b6;
+  --color-guanaco: #e3d5bf;
+  --color-guanaco-apagado: #a89c8a;
+
+  /* Player colours are part of the rules; these are the same four, retuned. */
+  --color-celeste: #5fa8d3;
+  --color-bordo: #a63446;
+  --color-verde: #4c8b5b;
+  --color-amarillo: #e0b93f;
+
+  --font-display: 'Chivo', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Asap', ui-sans-serif, system-ui, sans-serif;
+
+  --radius-panel: 6px;
+  --radius-carta: 10px;
+}
+
+body {
+  background-color: var(--color-noche);
+  color: var(--color-guanaco);
+  font-family: var(--font-sans);
+}
+
+/* Numbers that change — scores, dice, counters — must not shift width. */
+.tabular,
+.font-display {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
 /* A short tumble when the dice land, and a soft flash on production. */

@@ -7,11 +7,14 @@ import {
   type ResourceBundle,
   type TradeOffer,
 } from '@tierra-austral/engine';
-import { RESOURCE_LABELS } from '../lib/terrainStyles.js';
+import { RESOURCE_ICONS, RESOURCE_LABELS } from '../lib/terrainStyles.js';
 
 interface OfferPanelProps {
   readonly you: PlayerId;
   readonly hand: Readonly<ResourceBundle>;
+  /** What you picked from your hand: the cards you are putting on the table. */
+  readonly give: Readonly<Partial<ResourceBundle>>;
+  readonly onClearGive: () => void;
   readonly offers: readonly TradeOffer[];
   readonly moves: LegalMoves;
   readonly nameOf: (id: PlayerId) => string;
@@ -49,65 +52,39 @@ const describe = (bundle: Partial<ResourceBundle>): string => {
   return parts.length > 0 ? parts.join(' + ') : '—';
 };
 
-/** Two columns of counters: what you hand over and what you ask for. */
-function Sides({
-  give,
+/** The row of counters for what you are asking for in return. */
+function WantPicker({
   want,
-  setGive,
   setWant,
 }: {
-  readonly give: Record<Resource, number>;
   readonly want: Record<Resource, number>;
-  readonly setGive: (next: Record<Resource, number>) => void;
   readonly setWant: (next: Record<Resource, number>) => void;
 }) {
-  const row = (
-    side: Record<Resource, number>,
-    set: (next: Record<Resource, number>) => void,
-    resource: Resource,
-  ) => (
-    <div className="flex items-center gap-1">
-      <button
-        type="button"
-        onClick={() => {
-          set({ ...side, [resource]: Math.max(0, side[resource] - 1) });
-        }}
-        className="size-5 rounded bg-stone-700 text-xs"
-      >
-        −
-      </button>
-      <span className="w-4 text-center font-mono text-xs">{side[resource]}</span>
-      <button
-        type="button"
-        onClick={() => {
-          set({ ...side, [resource]: side[resource] + 1 });
-        }}
-        className="size-5 rounded bg-stone-700 text-xs"
-      >
-        +
-      </button>
-    </div>
-  );
-
   return (
-    <table className="w-full text-[11px]">
-      <thead className="text-stone-400">
-        <tr>
-          <th className="text-left font-normal">Recurso</th>
-          <th className="font-normal">Doy</th>
-          <th className="font-normal">Pido</th>
-        </tr>
-      </thead>
-      <tbody>
-        {RESOURCES.map((resource) => (
-          <tr key={resource}>
-            <td className="py-0.5">{RESOURCE_LABELS[resource]}</td>
-            <td>{row(give, setGive, resource)}</td>
-            <td>{row(want, setWant, resource)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div className="flex flex-wrap gap-1">
+      {RESOURCES.map((resource) => (
+        <button
+          key={resource}
+          type="button"
+          onClick={() => {
+            setWant({ ...want, [resource]: want[resource] + 1 });
+          }}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            setWant({ ...want, [resource]: Math.max(0, want[resource] - 1) });
+          }}
+          title={`${RESOURCE_LABELS[resource]} — clic para sumar, clic derecho para restar`}
+          className={`rounded-panel px-2 py-1 text-xs ${
+            want[resource] > 0
+              ? 'bg-guanaco text-noche font-semibold'
+              : 'bg-chapa-alta text-guanaco'
+          }`}
+        >
+          {RESOURCE_ICONS[resource]}
+          {want[resource] > 0 ? ` ${want[resource]}` : ''}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -120,6 +97,8 @@ function Sides({
 export function OfferPanel({
   you,
   hand,
+  give,
+  onClearGive,
   offers,
   moves,
   nameOf,
@@ -130,7 +109,6 @@ export function OfferPanel({
   onConfirm,
   onCancel,
 }: OfferPanelProps) {
-  const [give, setGive] = useState(emptyPick);
   const [want, setWant] = useState(emptyPick);
   // PlayerId is a string, so 'all' needs to be its own flag rather than a
   // member of the same union.
@@ -139,29 +117,36 @@ export function OfferPanel({
   const [counterGive, setCounterGive] = useState(emptyPick);
   const [counterWant, setCounterWant] = useState(emptyPick);
 
-  const giveTotal = RESOURCES.reduce((sum, resource) => sum + give[resource], 0);
+  const giveTotal = RESOURCES.reduce((sum, resource) => sum + (give[resource] ?? 0), 0);
   const wantTotal = RESOURCES.reduce((sum, resource) => sum + want[resource], 0);
-  const overHand = RESOURCES.some((resource) => give[resource] > hand[resource]);
-  const overlapping = RESOURCES.some((resource) => give[resource] > 0 && want[resource] > 0);
+  const overHand = RESOURCES.some((resource) => (give[resource] ?? 0) > hand[resource]);
+  const overlapping = RESOURCES.some((resource) => (give[resource] ?? 0) > 0 && want[resource] > 0);
   const canSend =
     moves.canCreateOffer && giveTotal > 0 && wantTotal > 0 && !overHand && !overlapping;
 
   return (
     <div>
-      <h2 className="mb-1 text-xs font-bold tracking-widest text-stone-400 uppercase">
-        Comercio con jugadores
-      </h2>
+      <h3 className="mb-1 text-[13px] font-semibold text-guanaco">Comercio con jugadores</h3>
 
       {moves.canCreateOffer ? (
-        <div className="mb-2 rounded bg-stone-800 p-2">
-          <Sides give={give} want={want} setGive={setGive} setWant={setWant} />
-          <div className="mt-1 flex items-center gap-2">
+        <div className="mb-2 rounded-panel bg-chapa p-2">
+          <p className="text-[11px] text-guanaco-apagado">
+            Doy{' '}
+            <span className="font-semibold text-guanaco">
+              {giveTotal === 0 ? 'nada todavía — elegí cartas de tu mano' : describe(give)}
+            </span>
+          </p>
+
+          <p className="mt-1.5 mb-1 text-[11px] text-guanaco-apagado">Pido</p>
+          <WantPicker want={want} setWant={setWant} />
+
+          <div className="mt-2 flex items-center gap-2">
             <select
               value={to}
               onChange={(event) => {
                 setTo(event.target.value);
               }}
-              className="rounded bg-stone-700 px-1 py-0.5 text-xs"
+              className="rounded-panel bg-chapa-alta px-1 py-0.5 text-xs"
             >
               <option value="all">A todos</option>
               {players
@@ -176,20 +161,18 @@ export function OfferPanel({
               type="button"
               disabled={!canSend}
               onClick={() => {
-                onCreate(trim(give), trim(want), to === 'all' ? 'all' : [to]);
-                setGive(emptyPick());
+                onCreate(give, trim(want), to === 'all' ? 'all' : [to]);
+                onClearGive();
                 setWant(emptyPick());
               }}
-              className="ml-auto rounded bg-stone-100 px-2 py-1 text-xs font-semibold text-stone-900 disabled:opacity-30"
+              className="ml-auto rounded-panel bg-guanaco px-2 py-1 text-xs font-semibold text-noche disabled:opacity-30"
             >
               Ofertar
             </button>
           </div>
+
           {overlapping ? (
-            <p className="mt-1 text-[10px] text-stone-400">No podés dar y pedir el mismo recurso</p>
-          ) : null}
-          {overHand ? (
-            <p className="mt-1 text-[10px] text-stone-400">No tenés esas cartas</p>
+            <p className="mt-1 text-[10px] text-lenga">No podés dar y pedir el mismo recurso</p>
           ) : null}
         </div>
       ) : null}
@@ -287,12 +270,10 @@ export function OfferPanel({
 
                 {counteringId === offer.id ? (
                   <div className="mt-2 border-t border-stone-700 pt-2">
-                    <Sides
-                      give={counterGive}
-                      want={counterWant}
-                      setGive={setCounterGive}
-                      setWant={setCounterWant}
-                    />
+                    <p className="mb-1 text-[10px] text-guanaco-apagado">Ofrezco</p>
+                    <WantPicker want={counterGive} setWant={setCounterGive} />
+                    <p className="mt-1.5 mb-1 text-[10px] text-guanaco-apagado">Y pido</p>
+                    <WantPicker want={counterWant} setWant={setCounterWant} />
                     <button
                       type="button"
                       onClick={() => {

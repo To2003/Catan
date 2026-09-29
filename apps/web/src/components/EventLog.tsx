@@ -61,7 +61,7 @@ export function EventLog({ events, you, context, debug }: EventLogProps) {
 
   return (
     <div className="flex min-h-0 flex-col">
-      <h2 className="mb-1 text-xs font-bold tracking-widest text-stone-400 uppercase">Qué pasó</h2>
+      <h3 className="mb-1 text-[13px] font-semibold text-guanaco">Qué pasó</h3>
 
       <ScrollPane
         itemCount={lineCount}

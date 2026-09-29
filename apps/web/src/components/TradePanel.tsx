@@ -27,9 +27,7 @@ export function TradePanel({ rates, hand, bank, enabled, onTrade }: TradePanelPr
 
   return (
     <div>
-      <h2 className="mb-1 text-xs font-bold tracking-widest text-stone-400 uppercase">
-        Comercio con el banco
-      </h2>
+      <h3 className="mb-1 text-[13px] font-semibold text-guanaco">Comercio con el banco</h3>
 
       <ul className="mb-2 grid grid-cols-5 gap-1 text-center font-mono text-[11px]">
         {RESOURCES.map((resource) => (
