@@ -1,6 +1,8 @@
-import { MIN_PLAYERS, type PlayerColor } from '@tierra-austral/engine';
+import { useMemo } from 'react';
+import { MIN_PLAYERS, generateBoard, type PlayerColor } from '@tierra-austral/engine';
 import { useGame } from '../store/gameStore.js';
 import { PLAYER_COLORS, PLAYER_COLOR_LABELS } from '../lib/playerColors.js';
+import { Board } from '../components/board/Board.js';
 
 const COLORS: readonly PlayerColor[] = ['celeste', 'bordo', 'verde', 'amarillo'];
 
@@ -11,7 +13,17 @@ export function LobbyScreen() {
   const setColor = useGame((state) => state.setColor);
   const setReady = useGame((state) => state.setReady);
   const start = useGame((state) => state.start);
+  const newBoard = useGame((state) => state.newBoard);
   const error = useGame((state) => state.error);
+
+  // The lobby draws the board from the seed the server is showing everybody.
+  // Generating it here is not a rule decision: it is the same pure function
+  // the engine uses, run on a number the server chose.
+  const previewSeed = room?.previewSeed;
+  const preview = useMemo(
+    () => (previewSeed === undefined ? undefined : generateBoard(previewSeed)),
+    [previewSeed],
+  );
 
   if (!room) return null;
   const me = room.seats.find((seat) => seat.playerId === playerId);
@@ -23,9 +35,31 @@ export function LobbyScreen() {
   return (
     <main className="flex h-screen flex-col items-center justify-center gap-6 bg-stone-900 text-stone-100">
       <div className="text-center">
-        <h1 className="text-2xl font-bold">Sala</h1>
-        <p className="font-mono text-4xl tracking-[0.3em]">{room.code}</p>
-        <p className="mt-1 text-xs text-stone-400">Pasale el código a los demás</p>
+        <h1 className="font-display text-2xl">Sala</h1>
+        <p className="font-display text-4xl tracking-[0.3em]">{room.code}</p>
+        <p className="mt-1 text-xs text-guanaco-apagado">Pasale el código a los demás</p>
+      </div>
+
+      {/* The board everybody is about to play, before anybody commits. */}
+      <div className="flex w-full max-w-3xl flex-col items-center">
+        <div className="h-64 w-full">
+          {preview ? (
+            <Board board={preview.board} robberHex={preview.robberHex} debug={false} />
+          ) : null}
+        </div>
+        {isHost ? (
+          <button
+            type="button"
+            onClick={newBoard}
+            className="mt-1 rounded-panel bg-chapa px-3 py-1 text-xs font-semibold hover:bg-chapa-alta"
+          >
+            Otro tablero
+          </button>
+        ) : (
+          <p className="mt-1 text-xs text-guanaco-apagado">
+            El host puede cambiar el tablero antes de arrancar
+          </p>
+        )}
       </div>
 
       {error ? <p className="rounded bg-bordo px-3 py-1.5 text-sm font-semibold">{error}</p> : null}
@@ -50,6 +84,14 @@ export function LobbyScreen() {
             ) : null}
             {!seat.connected ? (
               <span className="text-[10px] text-stone-500">desconectado</span>
+            ) : null}
+            {(room.wins[seat.playerId] ?? 0) > 0 ? (
+              <span
+                title={`${room.wins[seat.playerId] ?? 0} ganada(s) en esta sala`}
+                className="font-display text-[11px] text-estepa"
+              >
+                🏆 {room.wins[seat.playerId] ?? 0}
+              </span>
             ) : null}
             <span className="ml-auto text-xs">{seat.ready ? 'listo' : '…'}</span>
           </li>

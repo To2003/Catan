@@ -109,6 +109,61 @@ describe('surviving a restart', () => {
   });
 });
 
+describe('a restarted room across a reboot', () => {
+  let directory: string;
+  let db: string;
+  let harness: Harness;
+
+  beforeEach(() => {
+    directory = mkdtempSync(join(tmpdir(), 'tierra-austral-restart-'));
+    db = join(directory, 'restart.db');
+  });
+
+  afterEach(async () => {
+    await harness.close();
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  it('keeps the archived game and the one being played', async () => {
+    harness = await startHarness({ db });
+    const { host, second, third, code } = await seatThree(harness);
+    const players = [host, second, third];
+    host.socket.emit('room:start');
+    await until(() => players.every((client) => client.view !== undefined), 'views');
+
+    // One placement, then everybody agrees to start over.
+    const active = players.find((client) => client.playerId === host.view?.currentPlayer);
+    const before = active?.view?.version ?? 0;
+    active?.socket.emit('game:action', {
+      action: { type: 'placeSettlement', vertex: active.view?.legalMoves.settlements[0] },
+      expectedVersion: before,
+    });
+    await until(() => (host.view?.version ?? 0) > before, 'the placement');
+
+    host.socket.emit('room:proposeRestart');
+    await until(() => host.room?.restartVote !== undefined, 'the vote');
+    second.socket.emit('room:voteRestart', { approve: true });
+    third.socket.emit('room:voteRestart', { approve: true });
+    await until(() => (host.room?.gamesPlayed ?? 0) === 1, 'the restart');
+
+    const boardAfterRestart = JSON.stringify(host.view?.board.hexes);
+
+    // Down and up again on the same database.
+    await harness.close();
+    harness = await startHarness({ db });
+
+    const back = await harness.connect('Ana');
+    back.socket.emit('room:join', { code, name: 'Ana', token: host.token });
+    await until(() => back.view !== undefined, 'the room back');
+
+    // The game that was running is the one that comes back, and the finished
+    // one is still counted rather than overwritten.
+    expect(back.room?.gamesPlayed).toBe(1);
+    expect(JSON.stringify(back.view?.board.hexes)).toBe(boardAfterRestart);
+    expect(back.view?.version).toBe(0);
+  });
+});
+
 describe('rematch', () => {
   let harness: Harness;
 

@@ -26,6 +26,10 @@ export type TransportError =
   | 'GAME_NOT_STARTED'
   | 'NOTHING_TO_FORCE'
   | 'GAME_NOT_OVER'
+  | 'VOTE_OPEN'
+  | 'NO_VOTE'
+  | 'ALREADY_VOTED'
+  | 'ON_COOLDOWN'
   | 'TOO_SOON';
 
 export type ErrorPayload = { readonly code: ErrorCode | TransportError; readonly message: string };
@@ -39,6 +43,15 @@ export interface PublicSeat {
   readonly connected: boolean;
 }
 
+/** A vote to start over, as everybody in the room sees it. */
+export interface RestartVoteState {
+  readonly by: PlayerId;
+  readonly deadline: number;
+  readonly votes: Readonly<Record<PlayerId, 'yes' | 'no'>>;
+  /** Who still has to answer: the players who are actually here. */
+  readonly needed: readonly PlayerId[];
+}
+
 export interface RoomState {
   readonly code: string;
   readonly seats: readonly PublicSeat[];
@@ -46,6 +59,14 @@ export interface RoomState {
   readonly started: boolean;
   /** Who the room is waiting on, and since when, for the force-turn button. */
   readonly blockedBy?: { readonly playerId: PlayerId; readonly since: number };
+  /** The board the lobby is showing; the client draws it from the seed. */
+  readonly previewSeed: number;
+  /** Games won per player, across every game this room has played. */
+  readonly wins: Readonly<Record<PlayerId, number>>;
+  readonly gamesPlayed: number;
+  readonly restartVote?: RestartVoteState;
+  /** When each player may proponer otra vez a restart again, after one was refused. */
+  readonly restartCooldown: Readonly<Record<PlayerId, number>>;
 }
 
 /**
@@ -60,6 +81,10 @@ export interface ClientToServer {
   'room:start': () => void;
   'room:forceTurn': () => void;
   'room:rematch': () => void;
+  /** Lobby only, host only: draw a different board before starting. */
+  'room:newBoard': () => void;
+  'room:proposeRestart': () => void;
+  'room:voteRestart': (payload: unknown) => void;
   'game:action': (payload: unknown) => void;
   'chat:send': (payload: unknown) => void;
 }

@@ -43,6 +43,14 @@ export interface StoredSeat {
   readonly token: string;
 }
 
+/** A game that is over: kept whole, because a room can hold several. */
+export interface StoredGame {
+  readonly seed: number;
+  readonly actions: { playerId: PlayerId; action: Action }[];
+  readonly winner?: PlayerId;
+  readonly endedAt: number;
+}
+
 export interface StoredRoom {
   readonly code: string;
   readonly seed: number | undefined;
@@ -52,12 +60,20 @@ export interface StoredRoom {
   readonly lastActivity: number;
   readonly seats: StoredSeat[];
   readonly actions: { playerId: PlayerId; action: Action }[];
+  /** The board the lobby is showing before anybody presses start. */
+  readonly previewSeed: number;
+  /** Games already finished in this room, oldest first. */
+  readonly games: StoredGame[];
+  readonly wins: Readonly<Record<PlayerId, number>>;
 }
 
 export interface Store {
-  saveRoom(room: Omit<StoredRoom, 'actions'>): void;
+  saveRoom(room: Omit<StoredRoom, 'actions' | 'games'>): void;
+  archiveGame(code: string, index: number, game: StoredGame): void;
   appendAction(code: string, index: number, playerId: PlayerId, action: Action): void;
   loadRooms(): StoredRoom[];
+  /** Forgets the running game's moves, keeping the room and its archive. */
+  clearActions(code: string): void;
   deleteRoom(code: string): void;
   deleteIdleRooms(before: number): string[];
   close(): void;
@@ -66,8 +82,10 @@ export interface Store {
 /** A store that keeps nothing, for tests and for running without a database. */
 export const memoryStore = (): Store => ({
   saveRoom: () => undefined,
+  archiveGame: () => undefined,
   appendAction: () => undefined,
   loadRooms: () => [],
+  clearActions: () => undefined,
   deleteRoom: () => undefined,
   deleteIdleRooms: () => [],
   close: () => undefined,
@@ -84,7 +102,18 @@ export const sqliteStore = (path: string): Store => {
       started INTEGER NOT NULL,
       created_at INTEGER NOT NULL,
       last_activity INTEGER NOT NULL,
-      seats TEXT NOT NULL
+      seats TEXT NOT NULL,
+      preview_seed INTEGER NOT NULL DEFAULT 0,
+      wins TEXT NOT NULL DEFAULT '{}'
+    );
+    CREATE TABLE IF NOT EXISTS archived_games (
+      code TEXT NOT NULL,
+      idx INTEGER NOT NULL,
+      seed INTEGER NOT NULL,
+      actions TEXT NOT NULL,
+      winner TEXT,
+      ended_at INTEGER NOT NULL,
+      PRIMARY KEY (code, idx)
     );
     CREATE TABLE IF NOT EXISTS actions (
       code TEXT NOT NULL,
@@ -96,15 +125,22 @@ export const sqliteStore = (path: string): Store => {
   `);
 
   const upsertRoom = db.prepare(`
-    INSERT INTO rooms (code, seed, host_id, started, created_at, last_activity, seats)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO rooms (code, seed, host_id, started, created_at, last_activity, seats, preview_seed, wins)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(code) DO UPDATE SET
       seed = excluded.seed,
       host_id = excluded.host_id,
       started = excluded.started,
       last_activity = excluded.last_activity,
-      seats = excluded.seats
+      seats = excluded.seats,
+      preview_seed = excluded.preview_seed,
+      wins = excluded.wins
   `);
+  const insertArchived = db.prepare(
+    'INSERT OR REPLACE INTO archived_games (code, idx, seed, actions, winner, ended_at) VALUES (?, ?, ?, ?, ?, ?)',
+  );
+  const selectArchived = db.prepare('SELECT * FROM archived_games WHERE code = ? ORDER BY idx');
+  const removeArchived = db.prepare('DELETE FROM archived_games WHERE code = ?');
   const insertAction = db.prepare(
     'INSERT OR REPLACE INTO actions (code, idx, player_id, action) VALUES (?, ?, ?, ?)',
   );
@@ -124,6 +160,19 @@ export const sqliteStore = (path: string): Store => {
         room.createdAt,
         room.lastActivity,
         JSON.stringify(room.seats),
+        room.previewSeed,
+        JSON.stringify(room.wins),
+      );
+    },
+
+    archiveGame(code, index, game) {
+      insertArchived.run(
+        code,
+        index,
+        game.seed,
+        JSON.stringify(game.actions),
+        game.winner ?? null,
+        game.endedAt,
       );
     },
 
@@ -140,6 +189,8 @@ export const sqliteStore = (path: string): Store => {
         created_at: number;
         last_activity: number;
         seats: string;
+        preview_seed: number;
+        wins: string;
       }[];
 
       return rows.map((row) => {
@@ -148,6 +199,20 @@ export const sqliteStore = (path: string): Store => {
         ).map((entry) => ({
           playerId: entry.player_id,
           action: JSON.parse(entry.action) as Action,
+        }));
+
+        const games = (
+          selectArchived.all(row.code) as {
+            seed: number;
+            actions: string;
+            winner: string | null;
+            ended_at: number;
+          }[]
+        ).map((game) => ({
+          seed: game.seed,
+          actions: JSON.parse(game.actions) as { playerId: PlayerId; action: Action }[],
+          ...(game.winner === null ? {} : { winner: game.winner }),
+          endedAt: game.ended_at,
         }));
 
         return {
@@ -159,12 +224,20 @@ export const sqliteStore = (path: string): Store => {
           lastActivity: row.last_activity,
           seats: JSON.parse(row.seats) as StoredSeat[],
           actions,
+          previewSeed: row.preview_seed,
+          games,
+          wins: JSON.parse(row.wins) as Record<PlayerId, number>,
         };
       });
     },
 
+    clearActions(code) {
+      removeActions.run(code);
+    },
+
     deleteRoom(code) {
       removeActions.run(code);
+      removeArchived.run(code);
       removeRoom.run(code);
     },
 
@@ -172,6 +245,7 @@ export const sqliteStore = (path: string): Store => {
       const codes = (selectIdle.all(before) as { code: string }[]).map((row) => row.code);
       for (const code of codes) {
         removeActions.run(code);
+        removeArchived.run(code);
         removeRoom.run(code);
       }
       return codes;

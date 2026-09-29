@@ -148,3 +148,4 @@ export const actionMessageSchema = z
   .object({ action: actionSchema, expectedVersion: z.number().int().min(0) })
   .strict();
 export const chatSchema = z.object({ text: z.string().min(1).max(MAX_CHAT) }).strict();
+export const voteSchema = z.object({ approve: z.boolean() }).strict();

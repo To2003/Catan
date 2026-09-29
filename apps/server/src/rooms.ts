@@ -39,6 +39,14 @@ export interface Seat {
   blockingSince?: number;
 }
 
+/** A vote to start over, while a game is in progress (SPEC.md §7.1). */
+export interface RestartVote {
+  readonly by: PlayerId;
+  readonly startedAt: number;
+  readonly deadline: number;
+  votes: Record<PlayerId, 'yes' | 'no'>;
+}
+
 export interface Room {
   readonly code: string;
   seats: Seat[];
@@ -50,6 +58,22 @@ export interface Room {
   readonly actions: { playerId: PlayerId; action: Action }[];
   readonly createdAt: number;
   lastActivity: number;
+  /**
+   * The board the lobby is showing. It becomes the game's seed on start, so
+   * what everybody looked at is what they play.
+   */
+  previewSeed: number;
+  /** Finished games, oldest first. A room outlives its games. */
+  games: {
+    seed: number;
+    actions: { playerId: PlayerId; action: Action }[];
+    winner?: PlayerId;
+    endedAt: number;
+  }[];
+  wins: Record<PlayerId, number>;
+  restartVote?: RestartVote;
+  /** When each player may propose a restart again, after one was turned down. */
+  restartCooldown: Record<PlayerId, number>;
 }
 
 const rooms = new Map<string, Room>();
@@ -69,6 +93,8 @@ export const persistRoom = (room: Room): void => {
     started: room.started,
     createdAt: room.createdAt,
     lastActivity: room.lastActivity,
+    previewSeed: room.previewSeed,
+    wins: room.wins,
     seats: room.seats.map((seat) => ({
       playerId: seat.playerId,
       name: seat.name,
@@ -103,6 +129,10 @@ export const restoreRooms = (): { restored: number; failed: string[] } => {
   for (const stored of store.loadRooms()) {
     const room: Room = {
       code: stored.code,
+      previewSeed: stored.previewSeed,
+      games: stored.games.map((game) => ({ ...game })),
+      wins: { ...stored.wins },
+      restartCooldown: {},
       seats: stored.seats.map((seat) => ({
         playerId: seat.playerId,
         name: seat.name,
@@ -195,6 +225,10 @@ export const createRoom = (hostName: string): { room: Room; seat: Seat } => {
     actions: [],
     createdAt: Date.now(),
     lastActivity: Date.now(),
+    previewSeed: randomInt(0, 0xffffffff),
+    games: [],
+    wins: {},
+    restartCooldown: {},
   };
   rooms.set(code, room);
   return { room, seat };
@@ -228,9 +262,20 @@ export const canStart = (room: Room): boolean =>
   room.seats.length >= MIN_PLAYERS &&
   room.seats.every((seat) => seat.ready && seat.color !== undefined);
 
-/** Starts the game. The seed comes from crypto, not from anything guessable. */
+/** A fresh board for the lobby to look at. Only the host may ask for one. */
+export const rerollPreview = (room: Room): void => {
+  room.previewSeed = randomInt(0, 0xffffffff);
+  room.lastActivity = Date.now();
+};
+
+/**
+ * Starts the game on the board the lobby was showing.
+ *
+ * The seed comes from crypto, not from anything guessable, and it is the one
+ * everybody has been looking at: pressing start should not change the board.
+ */
 export const startGame = (room: Room): ReadonlyGameState => {
-  const seed = randomInt(0, 0xffffffff);
+  const seed = room.previewSeed;
   const state = createGame(
     seed,
     room.seats.map((seat) => ({
@@ -247,20 +292,44 @@ export const startGame = (room: Room): ReadonlyGameState => {
 };
 
 /**
- * A rematch: same room, same seats, a new game.
+ * A new game in the same room: same seats, same colours, a new board.
  *
- * The action list starts empty and a fresh seed is drawn, so the new game is
- * as replayable as the old one was. Nothing about the previous game is kept —
- * that is what "rematch" means.
+ * The one that was being played is **archived, not overwritten**. A room is
+ * seed + actions per game, so writing a restart into the running list would
+ * make the replay produce something that never happened. Used by both the
+ * rematch after a win and the voted restart mid-game.
  */
 export const restartGame = (room: Room): ReadonlyGameState => {
+  if (room.seed !== undefined && room.actions.length > 0) {
+    const winner = room.state?.phase.kind === 'gameOver' ? room.state.phase.winner : undefined;
+    const archived = {
+      seed: room.seed,
+      actions: [...room.actions],
+      ...(winner === undefined ? {} : { winner }),
+      endedAt: Date.now(),
+    };
+    room.games.push(archived);
+    store.archiveGame(room.code, room.games.length - 1, archived);
+  }
+
   room.actions.length = 0;
   room.started = false;
+  delete room.restartVote;
   for (const seat of room.seats) delete seat.blockingSince;
+
+  rerollPreview(room);
   const state = startGame(room);
-  store.deleteRoom(room.code);
+  // Only the finished game's move rows go: the archive of it, and the room
+  // itself, stay. Deleting the whole room here would have thrown away the
+  // history this method just wrote.
+  store.clearActions(room.code);
   persistRoom(room);
   return state;
+};
+
+/** Counts a win for the scoreboard the room keeps across games. */
+export const recordWin = (room: Room, playerId: PlayerId): void => {
+  room.wins[playerId] = (room.wins[playerId] ?? 0) + 1;
 };
 
 /** Hands the host role to the next connected seat. */
@@ -286,6 +355,21 @@ export const roomState = (room: Room): RoomState => {
     seats: room.seats.map(publicSeat),
     hostId: room.hostId,
     started: room.started,
+    previewSeed: room.previewSeed,
+    wins: { ...room.wins },
+    gamesPlayed: room.games.length,
+    restartCooldown: { ...room.restartCooldown },
+    ...(room.restartVote === undefined
+      ? {}
+      : {
+          restartVote: {
+            by: room.restartVote.by,
+            deadline: room.restartVote.deadline,
+            votes: { ...room.restartVote.votes },
+            // Only people who are here can hold up a restart.
+            needed: room.seats.filter((seat) => seat.connected).map((seat) => seat.playerId),
+          },
+        }),
     ...(blocked?.blockingSince === undefined
       ? {}
       : { blockedBy: { playerId: blocked.playerId, since: blocked.blockingSince } }),

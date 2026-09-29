@@ -35,12 +35,24 @@ export interface RoomSeat {
   readonly connected: boolean;
 }
 
+export interface RestartVoteState {
+  readonly by: string;
+  readonly deadline: number;
+  readonly votes: Readonly<Record<string, 'yes' | 'no'>>;
+  readonly needed: readonly string[];
+}
+
 export interface RoomState {
   readonly code: string;
   readonly seats: readonly RoomSeat[];
   readonly hostId: string;
   readonly started: boolean;
   readonly blockedBy?: { readonly playerId: string; readonly since: number };
+  readonly previewSeed: number;
+  readonly wins: Readonly<Record<string, number>>;
+  readonly gamesPlayed: number;
+  readonly restartVote?: RestartVoteState;
+  readonly restartCooldown: Readonly<Record<string, number>>;
 }
 
 interface ChatMessage {
@@ -75,6 +87,9 @@ interface GameStore {
   send: (action: Action) => void;
   sendChat: (text: string) => void;
   rematch: () => void;
+  newBoard: () => void;
+  proposeRestart: () => void;
+  voteRestart: (approve: boolean) => void;
   clearError: () => void;
 }
 
@@ -94,7 +109,11 @@ export const useGame = create<GameStore>((set, get) => {
     set({ error: 'Abriste la partida en otra pestaña' });
   });
   socket.on('room:state', (room: RoomState) => {
-    set({ room });
+    // A restart clears the running game's events: they belong to the game that
+    // just ended, which is archived now.
+    set((state) =>
+      (state.room?.gamesPlayed ?? 0) !== room.gamesPlayed ? { room, events: [] } : { room },
+    );
   });
   socket.on('game:state', (view: PlayerView) => {
     set({ view });
@@ -209,6 +228,16 @@ export const useGame = create<GameStore>((set, get) => {
     rematch: () => {
       set({ events: [], error: undefined });
       socket.emit('room:rematch');
+    },
+    newBoard: () => {
+      socket.emit('room:newBoard');
+    },
+    proposeRestart: () => {
+      set({ error: undefined });
+      socket.emit('room:proposeRestart');
+    },
+    voteRestart: (approve) => {
+      socket.emit('room:voteRestart', { approve });
     },
     clearError: () => {
       set({ error: undefined });

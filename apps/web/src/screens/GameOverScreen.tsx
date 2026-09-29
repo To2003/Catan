@@ -21,6 +21,8 @@ export function GameOverScreen() {
   const won = events.find((event) => event.type === 'GameWon');
   const winner = view.players.find((player) => player.id === phase.winner);
   const isHost = room?.hostId === view.you;
+  const wins = room?.wins ?? {};
+  const played = room?.gamesPlayed ?? 0;
 
   const buildingPoints = (playerId: PlayerId): { settlements: number; cities: number } => {
     let settlements = 0;
@@ -60,6 +62,7 @@ export function GameOverScreen() {
             <th className="font-normal">Ejército</th>
             <th className="font-normal">Cartas</th>
             <th className="font-normal">Total</th>
+            <th className="font-normal">Ganadas</th>
           </tr>
         </thead>
         <tbody>
@@ -100,11 +103,18 @@ export function GameOverScreen() {
                 <td className="text-center">{army ? 2 : 0}</td>
                 <td className="text-center">{hidden ?? '—'}</td>
                 <td className="text-center font-mono">{total}</td>
+                <td className="text-center font-mono text-estepa">{wins[player.id] ?? 0}</td>
               </tr>
             );
           })}
         </tbody>
       </table>
+
+      {played > 0 ? (
+        <p className="-mt-3 text-xs text-guanaco-apagado">
+          {played + 1} partida{played === 0 ? '' : 's'} jugadas en esta sala
+        </p>
+      ) : null}
 
       <div className="flex gap-2">
         {isHost ? (

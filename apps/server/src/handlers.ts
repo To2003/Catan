@@ -27,6 +27,8 @@ import {
   seatByToken,
   persistAction,
   persistRoom,
+  recordWin,
+  rerollPreview,
   restartGame,
   seatOf,
   startGame,
@@ -36,6 +38,7 @@ import {
   actionMessageSchema,
   chatSchema,
   createRoomSchema,
+  voteSchema,
   joinRoomSchema,
   readySchema,
   setColorSchema,
@@ -66,6 +69,10 @@ const MESSAGES: Record<TransportError, string> = {
   GAME_NOT_STARTED: 'La partida todavía no empezó',
   NOTHING_TO_FORCE: 'No hay a quién forzarle el turno',
   GAME_NOT_OVER: 'La partida todavía no terminó',
+  VOTE_OPEN: 'Ya hay una votación abierta',
+  NO_VOTE: 'No hay ninguna votación',
+  ALREADY_VOTED: 'Ya votaste',
+  ON_COOLDOWN: 'Hay que esperar para volver a proponer',
   TOO_SOON: 'Todavía no pasaron los 2 minutos',
 };
 
@@ -90,8 +97,14 @@ const CONCURRENT_ACTIONS = new Set<Action['type']>([
 
 export type { GameServer } from './broadcast.js';
 
+/** How long a restart vote stays open (SPEC.md §7.1). */
+const RESTART_VOTE_MS = 60_000;
+/** How long somebody waits after their proposal was turned down. */
+const RESTART_COOLDOWN_MS = 5 * 60_000;
+
 export const registerHandlers = (io: GameServer): void => {
   const connections: Connections = new Map();
+  const voteTimers = new Map<string, NodeJS.Timeout>();
   const queue = createQueue();
   const actionLimiter = createRateLimiter(30, 10_000);
   const chatLimiter = createRateLimiter(5, 10_000);
@@ -125,6 +138,53 @@ export const registerHandlers = (io: GameServer): void => {
     }
   };
 
+  /**
+   * Resolves an open vote if it can be.
+   *
+   * Unanimous among the players who are **here**: somebody who left cannot
+   * hold the room hostage, and a single "no" ends it on the spot. A refusal —
+   * by vote or by running out of time — puts the proposer on a cooldown, so
+   * nobody can keep asking.
+   */
+  const settleVote = (room: Room): void => {
+    const vote = room.restartVote;
+    if (!vote) return;
+
+    const here = room.seats.filter((seat) => seat.connected).map((seat) => seat.playerId);
+    const refused = Object.values(vote.votes).includes('no');
+    const expired = Date.now() >= vote.deadline;
+    const everyone = here.every((playerId) => vote.votes[playerId] === 'yes');
+
+    if (refused || expired) {
+      room.restartCooldown[vote.by] = Date.now() + RESTART_COOLDOWN_MS;
+      delete room.restartVote;
+      clearVoteTimer(room.code);
+      return;
+    }
+
+    if (here.length > 0 && everyone) {
+      delete room.restartVote;
+      clearVoteTimer(room.code);
+      restartGame(room);
+    }
+  };
+
+  const clearVoteTimer = (code: string): void => {
+    const timer = voteTimers.get(code);
+    if (timer) clearTimeout(timer);
+    voteTimers.delete(code);
+  };
+
+  const scheduleVoteTimeout = (room: Room): void => {
+    clearVoteTimer(room.code);
+    const timer = setTimeout(() => {
+      settleVote(room);
+      publish(room);
+    }, RESTART_VOTE_MS + 50);
+    timer.unref();
+    voteTimers.set(room.code, timer);
+  };
+
   const publish = (room: Room): void => {
     refreshBlocking(room);
     sendRoomState(io, room);
@@ -145,6 +205,11 @@ export const registerHandlers = (io: GameServer): void => {
     // Written inside the per-room queue, so the order on disk is the order the
     // actions were applied in (SPEC.md §7.2).
     persistAction(room, room.actions.length - 1, playerId, action);
+
+    // The room keeps a scoreboard across its games.
+    for (const event of result.events) {
+      if (event.type === 'GameWon') recordWin(room, event.player);
+    }
 
     sendEvents(io, room, connections, result.events);
     publish(room);
@@ -366,6 +431,85 @@ export const registerHandlers = (io: GameServer): void => {
         }
         publish(session.room);
       });
+    });
+
+    socket.on('room:newBoard', () => {
+      const session = sessionOf(socket);
+      if (!session) {
+        fail(socket, 'NO_SESSION');
+        return;
+      }
+      if (session.room.hostId !== session.playerId) {
+        fail(socket, 'NOT_HOST');
+        return;
+      }
+      if (session.room.started) {
+        fail(socket, 'GAME_IN_PROGRESS');
+        return;
+      }
+
+      rerollPreview(session.room);
+      persistRoom(session.room);
+      publish(session.room);
+    });
+
+    socket.on('room:proposeRestart', () => {
+      const session = sessionOf(socket);
+      if (!session) {
+        fail(socket, 'NO_SESSION');
+        return;
+      }
+      const { room, playerId } = session;
+      if (!room.started || !room.state) {
+        fail(socket, 'GAME_NOT_STARTED');
+        return;
+      }
+      if (room.restartVote) {
+        fail(socket, 'VOTE_OPEN');
+        return;
+      }
+      const until = room.restartCooldown[playerId] ?? 0;
+      if (Date.now() < until) {
+        fail(socket, 'ON_COOLDOWN');
+        return;
+      }
+
+      // Proposing is a vote in favour: nobody has to agree with themselves.
+      room.restartVote = {
+        by: playerId,
+        startedAt: Date.now(),
+        deadline: Date.now() + RESTART_VOTE_MS,
+        votes: { [playerId]: 'yes' },
+      };
+      scheduleVoteTimeout(room);
+      settleVote(room);
+      publish(room);
+    });
+
+    socket.on('room:voteRestart', (payload: unknown) => {
+      const parsed = voteSchema.safeParse(payload);
+      if (!parsed.success) {
+        fail(socket, 'BAD_PAYLOAD');
+        return;
+      }
+      const session = sessionOf(socket);
+      if (!session) {
+        fail(socket, 'NO_SESSION');
+        return;
+      }
+      const { room, playerId } = session;
+      if (!room.restartVote) {
+        fail(socket, 'NO_VOTE');
+        return;
+      }
+      if (room.restartVote.votes[playerId] !== undefined) {
+        fail(socket, 'ALREADY_VOTED');
+        return;
+      }
+
+      room.restartVote.votes[playerId] = parsed.data.approve ? 'yes' : 'no';
+      settleVote(room);
+      publish(room);
     });
 
     socket.on('room:rematch', () => {

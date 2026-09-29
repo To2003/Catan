@@ -20,6 +20,7 @@ import { FlyingCards } from '../components/effects/FlyingCards.js';
 import { RollOverlay } from '../components/effects/RollOverlay.js';
 import { Toasts } from '../components/effects/Toasts.js';
 import { TurnBanner, waitingFor } from '../components/TurnBanner.js';
+import { RestartVote } from '../components/RestartVote.js';
 import { EventLog } from '../components/EventLog.js';
 import { PlayerList } from '../components/PlayerList.js';
 import { RobberHint } from '../components/RobberHint.js';
@@ -45,6 +46,8 @@ export function GameScreen() {
   const error = useGame((state) => state.error);
   const send = useGame((state) => state.send);
   const forceTurn = useGame((state) => state.forceTurn);
+  const proposeRestart = useGame((state) => state.proposeRestart);
+  const voteRestart = useGame((state) => state.voteRestart);
   const chat = useGame((state) => state.chat);
   const sendChat = useGame((state) => state.sendChat);
   const effects = useGame((state) => state.effects);
@@ -492,6 +495,17 @@ export function GameScreen() {
               {view.me.stock.cities} ciudades
             </p>
           </section>
+
+          {room ? (
+            <RestartVote
+              room={room}
+              you={view.you}
+              nameOf={nameOf}
+              onPropose={proposeRestart}
+              onVote={voteRestart}
+              now={now}
+            />
+          ) : null}
 
           {/* 2. Who is playing. */}
           <section>

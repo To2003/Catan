@@ -192,6 +192,10 @@ export const createFixtureRoom = (back = 1): Fixture => {
       actions: kept,
       createdAt: Date.now(),
       lastActivity: Date.now(),
+      previewSeed: seed,
+      games: [],
+      wins: {},
+      restartCooldown: {},
     };
 
     putRoom(room);
