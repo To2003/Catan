@@ -26,10 +26,17 @@ const otherEnd = (state: ReadonlyGameState, edge: EdgeId, from: VertexId): Verte
   return a === from ? b : a;
 };
 
-/** The longest route this player has, in road segments. */
-export const longestRoadLength = (state: ReadonlyGameState, playerId: PlayerId): number => {
+/**
+ * The longest route this player has, as the roads that make it up.
+ *
+ * The path, not just its length, because the rule is unintuitive — branches do
+ * not add up — and the only convincing way to explain it is to draw the route
+ * being counted on the board. Ties are broken by whichever the search finds
+ * first: any longest route explains the number equally well.
+ */
+export const longestRoadPath = (state: ReadonlyGameState, playerId: PlayerId): EdgeId[] => {
   const own = state.board.edgeIds.filter((edge) => state.roads[edge] === playerId);
-  if (own.length === 0) return 0;
+  if (own.length === 0) return [];
 
   // Every vertex the network touches is a possible starting point.
   const starts = new Set<VertexId>();
@@ -37,30 +44,39 @@ export const longestRoadLength = (state: ReadonlyGameState, playerId: PlayerId):
     for (const vertex of state.board.edges[edge]?.vertices ?? []) starts.add(vertex);
   }
 
+  const walked: EdgeId[] = [];
   const used = new Set<EdgeId>();
+  let best: EdgeId[] = [];
 
-  const walk = (vertex: VertexId): number => {
-    let best = 0;
+  const walk = (vertex: VertexId): void => {
+    if (walked.length > best.length) best = [...walked];
+
     for (const edge of edgesAt(state, playerId, vertex)) {
       if (used.has(edge)) continue;
       const next = otherEnd(state, edge, vertex);
       if (next === undefined) continue;
 
       used.add(edge);
+      walked.push(edge);
       // The road counts either way; the route only continues if the far end is
       // not held by somebody else.
-      const beyond = isBlockedBy(state, playerId, next) ? 0 : walk(next);
+      if (isBlockedBy(state, playerId, next)) {
+        if (walked.length > best.length) best = [...walked];
+      } else {
+        walk(next);
+      }
+      walked.pop();
       used.delete(edge);
-
-      best = Math.max(best, 1 + beyond);
     }
-    return best;
   };
 
-  let longest = 0;
-  for (const start of starts) longest = Math.max(longest, walk(start));
-  return longest;
+  for (const start of starts) walk(start);
+  return best;
 };
+
+/** The longest route this player has, in road segments. */
+export const longestRoadLength = (state: ReadonlyGameState, playerId: PlayerId): number =>
+  longestRoadPath(state, playerId).length;
 
 export const longestRoadLengths = (state: ReadonlyGameState): Map<PlayerId, number> =>
   new Map(state.players.map((player) => [player.id, longestRoadLength(state, player.id)]));

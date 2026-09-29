@@ -8,7 +8,7 @@ import {
 } from '@tierra-austral/engine';
 import { DebugOverlay } from './DebugOverlay.js';
 import { Pieces } from './Pieces.js';
-import { Targets } from './Targets.js';
+import { HexTargets, Markers, SpotTargets } from './Targets.js';
 import { Hex } from './Hex.js';
 import { NumberToken } from './NumberToken.js';
 import { Port } from './Port.js';
@@ -25,6 +25,15 @@ export interface BoardInteraction {
   readonly onVertex: (vertex: VertexId) => void;
   readonly onEdge: (edge: EdgeId) => void;
   readonly onHex: (hex: HexId) => void;
+  /** Which hex the pointer is over, while choosing where the robber goes. */
+  readonly hoveredHex?: HexId | undefined;
+  readonly onHexHover?: (hex: HexId | undefined) => void;
+  /** Buildings to ring: who the robber would hit, or whose pieces to point at. */
+  readonly markedVertices?: readonly VertexId[];
+  /** Roads to trace: somebody's longest route, drawn so the number makes sense. */
+  readonly markedEdges?: readonly EdgeId[];
+  /** Hexes whose numbers just paid out, for the roll's halo. */
+  readonly pulsingHexes?: readonly HexId[];
 }
 
 interface BoardProps {
@@ -73,24 +82,46 @@ export function Board({ board, robberHex, debug, interaction }: BoardProps) {
           return <NumberToken key={id} center={hex.center} value={hex.number} />;
         })}
       </g>
+      {/* Choosing a hex happens *under* the pieces: the tint dims terrain, and
+          what people built on it stays at full strength. */}
+      {interaction && interaction.legalHexes.length > 0 ? (
+        <HexTargets
+          board={board}
+          hexes={interaction.legalHexes}
+          blocked={robberHex}
+          hovered={interaction.hoveredHex}
+          onHex={interaction.onHex}
+          onHover={interaction.onHexHover ?? (() => undefined)}
+        />
+      ) : null}
+
       {interaction ? (
         <Pieces
           board={board}
           buildings={interaction.buildings}
           roads={interaction.roads}
           colorOf={interaction.colorOf}
+          emphasis={interaction.legalHexes.length > 0}
         />
       ) : null}
-      {robber ? <Robber center={robber.center} /> : null}
+
       {interaction ? (
-        <Targets
+        <Markers
+          board={board}
+          vertices={interaction.markedVertices ?? []}
+          edges={interaction.markedEdges ?? []}
+        />
+      ) : null}
+
+      {robber ? <Robber center={robber.center} /> : null}
+
+      {interaction ? (
+        <SpotTargets
           board={board}
           vertices={interaction.legalVertices}
           edges={interaction.legalEdges}
-          hexes={interaction.legalHexes}
           onVertex={interaction.onVertex}
           onEdge={interaction.onEdge}
-          onHex={interaction.onHex}
         />
       ) : null}
       {debug ? <DebugOverlay board={board} /> : null}

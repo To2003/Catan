@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   RESOURCES,
-  isVisibleTo,
   type DevCard,
   type EdgeId,
   type HexId,
@@ -17,8 +16,10 @@ import { ResourceChoiceModal } from '../components/ResourceChoiceModal.js';
 import { OfferPanel } from '../components/OfferPanel.js';
 import { TradePanel } from '../components/TradePanel.js';
 import { Chat } from '../components/Chat.js';
+import { EventLog } from '../components/EventLog.js';
+import { PlayerList } from '../components/PlayerList.js';
+import { RobberHint } from '../components/RobberHint.js';
 import { DiceRoll } from '../components/DiceRoll.js';
-import { eventText } from '../lib/eventText.js';
 import { isMuted, setMuted } from '../lib/sounds.js';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
 import { RESOURCE_LABELS } from '../lib/terrainStyles.js';
@@ -43,6 +44,13 @@ export function GameScreen() {
   const [muted, setMutedState] = useState(isMuted);
 
   const [choosing, setChoosing] = useState<'yearOfPlenty' | 'monopoly' | null>(null);
+  /** Which hex the pointer is over while the robber is being placed. */
+  const [hoveredHex, setHoveredHex] = useState<HexId | undefined>(undefined);
+  const [pointer, setPointer] = useState({ x: 0, y: 0 });
+  /** Whose longest route to trace on the board. */
+  const [hoveredRoute, setHoveredRoute] = useState<PlayerId | undefined>(undefined);
+  /** Whose buildings to ring, while picking somebody to rob. */
+  const [hoveredVictim, setHoveredVictim] = useState<PlayerId | undefined>(undefined);
 
   // A ticking clock, so the force-turn button lights up on its own rather than
   // reading the wall clock while rendering. The server is the one that enforces
@@ -137,6 +145,28 @@ export function GameScreen() {
       ? lastGain.grants.filter((grant) => grant.player === view.you).map((grant) => grant.resource)
       : [],
   );
+
+  /** The buildings worth pointing at right now: a robbery's victims, or a target's. */
+  const markedVertices = (() => {
+    if (hoveredVictim !== undefined) {
+      return view.board.vertexIds.filter(
+        (vertex) => view.buildings[vertex]?.owner === hoveredVictim,
+      );
+    }
+    if (hoveredHex !== undefined) {
+      const corners = view.board.hexes[hoveredHex]?.corners ?? [];
+      return corners.filter((corner) => {
+        const owner = view.buildings[corner]?.owner;
+        return owner !== undefined && owner !== view.you;
+      });
+    }
+    return [];
+  })();
+
+  const markedEdges =
+    hoveredRoute === undefined
+      ? []
+      : (view.players.find((player) => player.id === hoveredRoute)?.route ?? []);
 
   const isMyTurn = view.currentPlayer === view.you;
   const owed = view.legalMoves.discardOwed;
@@ -242,7 +272,12 @@ export function GameScreen() {
           />
         ) : null}
 
-        <section className="min-h-0 flex-1 p-2">
+        <section
+          className="min-h-0 flex-1 p-2"
+          onMouseMove={(event) => {
+            if (hoveredHex !== undefined) setPointer({ x: event.clientX, y: event.clientY });
+          }}
+        >
           <Board
             board={view.board}
             robberHex={view.robberHex}
@@ -259,47 +294,30 @@ export function GameScreen() {
               onVertex,
               onEdge,
               onHex,
+              hoveredHex,
+              onHexHover: setHoveredHex,
+              markedVertices,
+              markedEdges,
             }}
           />
         </section>
+
+        {hoveredHex !== undefined ? (
+          <RobberHint view={view} hex={hoveredHex} at={pointer} nameOf={nameOf} />
+        ) : null}
 
         <aside className="flex w-80 min-w-80 flex-col gap-3 overflow-y-auto border-l border-stone-700 p-3 text-sm">
           <div>
             <h2 className="mb-1 text-xs font-bold tracking-widest text-stone-400 uppercase">
               Jugadores
             </h2>
-            <ul className="space-y-1">
-              {view.turnOrder.map((id) => {
-                const player = view.players.find((candidate) => candidate.id === id);
-                if (!player) return null;
-                const seat = room?.seats.find((candidate) => candidate.playerId === id);
-                return (
-                  <li
-                    key={id}
-                    className={`flex items-center gap-2 rounded px-2 py-1 ${
-                      id === view.currentPlayer ? 'bg-stone-700' : ''
-                    }`}
-                  >
-                    <span
-                      className="inline-block size-3 rounded-full"
-                      style={{ backgroundColor: PLAYER_COLORS[player.color] }}
-                    />
-                    <span>{player.name}</span>
-                    {view.longestRoad?.owner === id ? (
-                      <span title="Camino más largo">🛣</span>
-                    ) : null}
-                    {view.largestArmy === id ? <span title="Gran ejército">⚔</span> : null}
-                    {seat && !seat.connected ? (
-                      <span className="text-[10px] text-stone-500">offline</span>
-                    ) : null}
-                    <span className="ml-auto font-mono text-xs text-stone-400">
-                      {player.resourceCount}🂠{' '}
-                      {id === view.you ? view.me.points : player.publicPoints} PV
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
+            <PlayerList
+              view={view}
+              connected={(id) =>
+                room?.seats.find((seat) => seat.playerId === id)?.connected ?? true
+              }
+              onHoverRoute={setHoveredRoute}
+            />
           </div>
 
           {view.legalMoves.stealTargets.length > 0 ? (
@@ -308,18 +326,35 @@ export function GameScreen() {
                 Robarle a
               </h2>
               <div className="flex flex-wrap gap-2">
-                {view.legalMoves.stealTargets.map((target) => (
-                  <button
-                    key={target}
-                    type="button"
-                    onClick={() => {
-                      send({ type: 'steal', target });
-                    }}
-                    className="rounded bg-stone-100 px-2 py-1 text-xs font-semibold text-stone-900"
-                  >
-                    {nameOf(target)}
-                  </button>
-                ))}
+                {view.legalMoves.stealTargets.map((target) => {
+                  const victim = view.players.find((player) => player.id === target);
+                  return (
+                    <button
+                      key={target}
+                      type="button"
+                      onClick={() => {
+                        send({ type: 'steal', target });
+                      }}
+                      // Hovering a name rings that player's buildings, so you
+                      // can see who you are about to rob before you do it.
+                      onMouseEnter={() => {
+                        setHoveredVictim(target);
+                      }}
+                      onMouseLeave={() => {
+                        setHoveredVictim(undefined);
+                      }}
+                      onFocus={() => {
+                        setHoveredVictim(target);
+                      }}
+                      onBlur={() => {
+                        setHoveredVictim(undefined);
+                      }}
+                      className="rounded bg-stone-100 px-2 py-1 text-xs font-semibold text-stone-900"
+                    >
+                      {nameOf(target)} · {victim?.resourceCount ?? 0} 🂠
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ) : null}
@@ -389,24 +424,9 @@ export function GameScreen() {
             }}
           />
 
-          <Chat messages={chat} nameOf={nameOf} onSend={sendChat} />
+          <Chat messages={chat} nameOf={nameOf} colorOf={colorOf} onSend={sendChat} />
 
-          <div className="min-h-0 flex-1">
-            <h2 className="mb-1 text-xs font-bold tracking-widest text-stone-400 uppercase">
-              Eventos ({events.length})
-            </h2>
-            <ol className="space-y-0.5 font-mono text-[11px] text-stone-300">
-              {[...events]
-                .filter((event) => isVisibleTo(event, view.you))
-                .slice(-60)
-                .reverse()
-                .map((event, index) => (
-                  <li key={`${event.type}-${events.length - index}`} className="truncate">
-                    {eventText(event, nameOf)}
-                  </li>
-                ))}
-            </ol>
-          </div>
+          <EventLog events={events} you={view.you} nameOf={nameOf} debug={false} />
         </aside>
       </div>
     </main>

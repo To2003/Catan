@@ -3,6 +3,7 @@ import {
   LONGEST_ROAD_MIN_LENGTH,
   applyAction,
   longestRoadLength,
+  longestRoadPath,
   publicVictoryPoints,
   recomputeLongestRoad,
   type EdgeId,
@@ -288,5 +289,70 @@ describe('recalculating after every placement', () => {
       edge: at(chain.edges, 4),
     });
     expect(state.longestRoad).toEqual({ owner: ANA.id, length: LONGEST_ROAD_MIN_LENGTH });
+  });
+});
+
+describe('the route behind the number', () => {
+  it('returns roads that actually form the longest route', () => {
+    const chain = chainOf(game, 5);
+    const state = position((s) => {
+      for (const edge of chain.edges) s.roads[edge] = ANA.id;
+    });
+
+    const path = longestRoadPath(state, ANA.id);
+    expect(path).toHaveLength(5);
+    expect([...path].sort()).toEqual([...chain.edges].sort());
+  });
+
+  it('leaves out the branch that does not count', () => {
+    // A Y of 3, 2 and 1: the route is 3 + 2, and the short branch is not in it.
+    const junction = board.vertexIds.find(
+      (vertex) => (board.vertices[vertex]?.edges ?? []).length === 3,
+    );
+    if (!junction) throw new Error('no vertex of degree three');
+
+    const branches: EdgeId[][] = [];
+    const state = position((s) => {
+      const lengths = [3, 2, 1];
+      const taken = new Set<EdgeId>();
+      (board.vertices[junction]?.edges ?? []).forEach((first, index) => {
+        const want = lengths[index] ?? 0;
+        const branch: EdgeId[] = [];
+        let vertex = junction;
+        let edge: EdgeId | undefined = first;
+        for (let step = 0; step < want; step += 1) {
+          if (edge === undefined || taken.has(edge)) break;
+          taken.add(edge);
+          s.roads[edge] = ANA.id;
+          branch.push(edge);
+          const link = s.board.edges[edge];
+          const [a, b] = link?.vertices ?? [vertex, vertex];
+          vertex = a === vertex ? b : a;
+          edge = (s.board.vertices[vertex]?.edges ?? []).find(
+            (candidate) =>
+              candidate !== edge && !taken.has(candidate) && s.roads[candidate] === undefined,
+          );
+        }
+        branches.push(branch);
+      });
+    });
+
+    const path = longestRoadPath(state, ANA.id);
+    expect(path).toHaveLength(5);
+
+    // Six roads on the board, five in the route: the shortest branch is out.
+    const onBoard = Object.keys(state.roads);
+    expect(onBoard).toHaveLength(6);
+    const shortest = branches.find((branch) => branch.length === 1) ?? [];
+    expect(path).not.toContain(shortest[0]);
+  });
+
+  it('is empty for a player with no roads', () => {
+    expect(
+      longestRoadPath(
+        position(() => undefined),
+        ANA.id,
+      ),
+    ).toEqual([]);
   });
 });

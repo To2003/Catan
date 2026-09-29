@@ -1,5 +1,6 @@
 import type { LegalMoves } from './legal.js';
 import { legalMoves } from './legal.js';
+import { longestRoadPath } from './rules/longestRoad.js';
 import { publicVictoryPoints, victoryPoints } from './rules/victory.js';
 import type {
   BoardGraph,
@@ -41,6 +42,17 @@ export interface PublicPlayer {
   readonly connected: boolean;
   /** Buildings and bonuses only: victory cards stay hidden (SPEC.md §4.10). */
   readonly publicPoints: number;
+  /** Roads on the board. Not the same as the route below, and that is the point. */
+  readonly roadCount: number;
+  /**
+   * The longest continuous route, and the roads that make it up.
+   *
+   * Public: every road is on the table, so anyone could work this out. It
+   * travels because the rule is unintuitive — branches do not add up — and the
+   * interface can only explain it by drawing the route it counted.
+   */
+  readonly routeLength: number;
+  readonly route: readonly EdgeId[];
 }
 
 /** What you may know about yourself, on top of the above. */
@@ -83,6 +95,7 @@ const handSize = (resources: Readonly<ResourceBundle>): number =>
 const toPublic = (state: ReadonlyGameState, playerId: PlayerId): PublicPlayer => {
   const player = state.players.find((candidate) => candidate.id === playerId);
   if (!player) throw new Error(`no player ${playerId}`);
+  const route = longestRoadPath(state, playerId);
   return {
     id: player.id,
     name: player.name,
@@ -93,6 +106,9 @@ const toPublic = (state: ReadonlyGameState, playerId: PlayerId): PublicPlayer =>
     stock: { ...player.stock },
     connected: player.connected,
     publicPoints: publicVictoryPoints(state, player.id),
+    roadCount: Object.values(state.roads).filter((owner) => owner === player.id).length,
+    routeLength: route.length,
+    route,
   };
 };
 

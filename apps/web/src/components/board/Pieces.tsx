@@ -5,10 +5,13 @@ interface PiecesProps {
   readonly buildings: Readonly<Record<VertexId, { owner: PlayerId; type: 'settlement' | 'city' }>>;
   readonly roads: Readonly<Record<EdgeId, PlayerId>>;
   readonly colorOf: (playerId: PlayerId) => string;
+  /** Thicker outlines, for when the board is dimmed and the pieces are the point. */
+  readonly emphasis?: boolean;
 }
 
 /** Settlements, cities and roads on the board, drawn in unit space. */
-export function Pieces({ board, buildings, roads, colorOf }: PiecesProps) {
+export function Pieces({ board, buildings, roads, colorOf, emphasis = false }: PiecesProps) {
+  const outline = emphasis ? 0.05 : 0.03;
   return (
     <g pointerEvents="none">
       {board.edgeIds.map((id) => {
@@ -26,7 +29,7 @@ export function Pieces({ board, buildings, roads, colorOf }: PiecesProps) {
             x2={b.x}
             y2={b.y}
             stroke={colorOf(owner)}
-            strokeWidth={0.11}
+            strokeWidth={emphasis ? 0.14 : 0.11}
             strokeLinecap="round"
           />
         );
@@ -50,8 +53,8 @@ export function Pieces({ board, buildings, roads, colorOf }: PiecesProps) {
               height={size * 2}
               rx={0.03}
               fill={fill}
-              stroke="#12100e"
-              strokeWidth={0.03}
+              stroke={emphasis ? '#ffffff' : '#12100e'}
+              strokeWidth={outline}
             />
           );
         }
@@ -63,8 +66,8 @@ export function Pieces({ board, buildings, roads, colorOf }: PiecesProps) {
             cy={vertex.y}
             r={0.12}
             fill={fill}
-            stroke="#12100e"
-            strokeWidth={0.03}
+            stroke={emphasis ? '#ffffff' : '#12100e'}
+            strokeWidth={outline}
           />
         );
       })}
