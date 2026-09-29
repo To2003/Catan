@@ -5,7 +5,17 @@ import {
   type PlayerId,
   type ResourceBundle,
 } from '@tierra-austral/engine';
-import { RESOURCE_LABELS } from './terrainStyles.js';
+import { RESOURCE_ICONS, RESOURCE_LABELS } from './terrainStyles.js';
+
+/**
+ * Events, written for the people playing.
+ *
+ * The log used to read like the engine's own vocabulary — "Fase: moveRobber",
+ * "mueve el ladrón de h9 a h14" — which is exactly what a player cannot use.
+ * Hexes get called by what they look like on the table, phases stay out of the
+ * way unless you asked for them, and every line starts with an icon so the
+ * column can be skimmed.
+ */
 
 export const DEV_CARD_LABELS: Record<DevCard, string> = {
   knight: 'Caballero',
@@ -15,106 +25,211 @@ export const DEV_CARD_LABELS: Record<DevCard, string> = {
   monopoly: 'Monopolio',
 };
 
-const describeBundle = (bundle: Partial<Readonly<ResourceBundle>>): string =>
-  RESOURCES.filter((resource) => (bundle[resource] ?? 0) > 0)
-    .map((resource) => `${bundle[resource] ?? 0} ${RESOURCE_LABELS[resource]}`)
-    .join(', ');
+const describeBundle = (bundle: Partial<Readonly<ResourceBundle>>): string => {
+  const parts = RESOURCES.filter((resource) => (bundle[resource] ?? 0) > 0).map(
+    (resource) => `${bundle[resource] ?? 0} ${RESOURCE_ICONS[resource]}`,
+  );
+  return parts.length > 0 ? parts.join(' + ') : '—';
+};
 
-/**
- * Engine events as a line of text for the debug log. Rough on purpose: this is
- * a tool, not the game log the players will read.
- */
-export const eventText = (event: GameEvent, nameOf: (id: PlayerId) => string): string => {
+export interface LogLine {
+  readonly icon: string;
+  readonly text: string;
+  /** Phase changes and other machinery: hidden unless the debug flag is on. */
+  readonly internal?: boolean;
+}
+
+export interface LogContext {
+  readonly nameOf: (playerId: PlayerId) => string;
+  /** A hex as a person would name it: "el bosque del 11". */
+  readonly hexLabel: (hex: string) => string;
+}
+
+export const eventLine = (event: GameEvent, { nameOf, hexLabel }: LogContext): LogLine => {
   switch (event.type) {
     case 'SetupSettlementPlaced':
-      return `${nameOf(event.player)} coloca un asentamiento en ${event.vertex}`;
+      return { icon: '🏠', text: `${nameOf(event.player)} fundó un pueblo` };
     case 'SetupRoadPlaced':
-      return `${nameOf(event.player)} coloca un camino en ${event.edge}`;
+      return { icon: '🛤', text: `${nameOf(event.player)} trazó su primer camino` };
     case 'SetupResourcesGranted':
-      return event.grants.length === 0
-        ? `${nameOf(event.player)} no cobra nada por el segundo asentamiento`
-        : `${nameOf(event.player)} cobra ${event.grants
-            .map((grant) => `${grant.amount} ${RESOURCE_LABELS[grant.resource]}`)
-            .join(', ')}`;
+      return {
+        icon: '🎁',
+        text:
+          event.grants.length === 0
+            ? `${nameOf(event.player)} no cobró nada por su segundo pueblo`
+            : `${nameOf(event.player)} cobró ${describeBundle(
+                event.grants.reduce<Partial<ResourceBundle>>((total, grant) => {
+                  total[grant.resource] = (total[grant.resource] ?? 0) + grant.amount;
+                  return total;
+                }, {}),
+              )}`,
+      };
+
     case 'DiceRolled':
-      return `${nameOf(event.player)} tira ${event.dice[0]} + ${event.dice[1]} = ${event.total}`;
-    case 'ResourcesProduced':
-      return `Producción: ${event.grants
-        .map(
-          (grant) => `${nameOf(grant.player)} +${grant.amount} ${RESOURCE_LABELS[grant.resource]}`,
-        )
-        .join(' · ')}`;
+      return {
+        icon: '🎲',
+        text: `${nameOf(event.player)} tiró ${event.dice[0]} + ${event.dice[1]} = ${event.total}`,
+      };
+
+    case 'ResourcesProduced': {
+      const byPlayer = new Map<PlayerId, Partial<ResourceBundle>>();
+      for (const grant of event.grants) {
+        const bundle = byPlayer.get(grant.player) ?? {};
+        bundle[grant.resource] = (bundle[grant.resource] ?? 0) + grant.amount;
+        byPlayer.set(grant.player, bundle);
+      }
+      return {
+        icon: '🌾',
+        text: [...byPlayer.entries()]
+          .map(([playerId, bundle]) => `${nameOf(playerId)} ${describeBundle(bundle)}`)
+          .join(' · '),
+      };
+    }
+
     case 'ProductionSkipped':
       return event.reason === 'robber'
-        ? `El ladrón bloquea ${event.hex}`
-        : `Al banco no le alcanza: nadie cobra ${RESOURCE_LABELS[event.resource]}`;
-    case 'RoadPlaced':
-      return `${nameOf(event.player)} construye un camino en ${event.edge}`;
-    case 'BuildingPlaced':
-      return `${nameOf(event.player)} construye un asentamiento en ${event.vertex}`;
-    case 'CityUpgraded':
-      return `${nameOf(event.player)} mejora a ciudad en ${event.vertex}`;
-    case 'ResourcesPaid':
-      return `${nameOf(event.player)} paga al banco`;
+        ? { icon: '🦹', text: `El ladrón bloqueó ${hexLabel(event.hex)}` }
+        : {
+            icon: '🏦',
+            text: `El banco se quedó sin ${RESOURCE_LABELS[event.resource].toLowerCase()}: nadie cobró`,
+          };
+
     case 'DiscardRequired':
-      return `Sale un 7: descartan ${Object.entries(event.pending)
-        .map(([id, count]) => `${nameOf(id)} (${count})`)
-        .join(', ')}`;
+      return {
+        icon: '💀',
+        text: `Salió 7 y descartan ${Object.entries(event.pending)
+          .map(([playerId, count]) => `${nameOf(playerId)} (${count})`)
+          .join(', ')}`,
+      };
     case 'CardsDiscarded':
-      return `${nameOf(event.player)} descarta ${event.count} cartas`;
+      return { icon: '🗑', text: `${nameOf(event.player)} descartó ${event.count} cartas` };
     case 'DiscardDetail':
-      return `  ${nameOf(event.player)} descarta ${describeBundle(event.cards)}`;
+      return { icon: '🗑', text: `Descartaste ${describeBundle(event.cards)}`, internal: false };
+
     case 'RobberMoved':
-      return `${nameOf(event.player)} mueve el ladrón de ${event.from} a ${event.to}`;
+      return {
+        icon: '🦹',
+        text: `${nameOf(event.player)} movió el ladrón a ${hexLabel(event.to)}`,
+      };
     case 'StealSkipped':
-      return 'No hay a quién robarle';
+      return { icon: '🤷', text: 'No había a quién robarle' };
     case 'StealResolved':
-      return `${nameOf(event.thief)} le roba una carta a ${nameOf(event.victim)}`;
+      return {
+        icon: '🂠',
+        text: `${nameOf(event.thief)} le robó una carta a ${nameOf(event.victim)}`,
+      };
     case 'ResourceStolen':
-      return `  La carta robada es ${RESOURCE_LABELS[event.resource]}`;
+      return {
+        icon: '👀',
+        text: `La carta fue ${RESOURCE_LABELS[event.resource].toLowerCase()} ${
+          RESOURCE_ICONS[event.resource]
+        }`,
+      };
+
+    case 'RoadPlaced':
+      return { icon: '🛤', text: `${nameOf(event.player)} construyó un camino` };
+    case 'BuildingPlaced':
+      return { icon: '🏠', text: `${nameOf(event.player)} construyó un pueblo` };
+    case 'CityUpgraded':
+      return { icon: '🏛', text: `${nameOf(event.player)} levantó una ciudad` };
+    case 'ResourcesPaid':
+      return { icon: '💸', text: `${nameOf(event.player)} pagó al banco`, internal: true };
+
     case 'MaritimeTraded':
-      return `${nameOf(event.player)} cambia ${event.gave} ${RESOURCE_LABELS[event.give]} por 1 ${
-        RESOURCE_LABELS[event.want]
-      } (${event.rate}:1)`;
+      return {
+        icon: '⛵',
+        text: `${nameOf(event.player)} cambió ${event.gave} ${
+          RESOURCE_ICONS[event.give]
+        } por 1 ${RESOURCE_ICONS[event.want]} (${event.rate}:1)`,
+      };
+
     case 'DevCardBought':
-      return `${nameOf(event.player)} compra una carta de desarrollo (quedan ${event.deckLeft})`;
+      return {
+        icon: '🃏',
+        text: `${nameOf(event.player)} compró una carta (quedan ${event.deckLeft})`,
+      };
     case 'DevCardDrawn':
-      return `  La carta comprada es ${DEV_CARD_LABELS[event.card]}`;
+      return { icon: '👀', text: `Te tocó ${DEV_CARD_LABELS[event.card]}` };
     case 'DevCardPlayed':
-      return `${nameOf(event.player)} juega ${DEV_CARD_LABELS[event.card]}`;
+      return { icon: '🃏', text: `${nameOf(event.player)} jugó ${DEV_CARD_LABELS[event.card]}` };
     case 'YearOfPlentyTaken':
-      return `${nameOf(event.player)} toma ${event.resources
-        .map((resource) => RESOURCE_LABELS[resource])
-        .join(' y ')}`;
+      return {
+        icon: '🎁',
+        text: `${nameOf(event.player)} tomó ${event.resources
+          .map((resource) => RESOURCE_ICONS[resource])
+          .join(' + ')} del banco`,
+      };
     case 'MonopolyResolved':
-      return `${nameOf(event.player)} monopoliza ${RESOURCE_LABELS[event.resource]}: ${
-        event.total
-      } cartas (${event.from.map((from) => `${nameOf(from.player)} ${from.amount}`).join(', ')})`;
+      return {
+        icon: '💰',
+        text: `${nameOf(event.player)} monopolizó ${RESOURCE_LABELS[
+          event.resource
+        ].toLowerCase()} y juntó ${event.total}`,
+      };
     case 'RoadBuildingStarted':
-      return `${nameOf(event.player)} coloca ${event.remaining} caminos gratis`;
+      return { icon: '🛤', text: `${nameOf(event.player)} pone ${event.remaining} caminos gratis` };
     case 'RoadBuildingEnded':
-      return `${nameOf(event.player)} colocó ${event.placed} camino(s) de la carta`;
-    case 'LongestRoadChanged':
-      return event.owner === undefined
-        ? 'El camino más largo queda vacante'
-        : `${nameOf(event.owner)} se lleva el camino más largo (${event.length})`;
-    case 'LargestArmyChanged':
-      return `${nameOf(event.owner)} se lleva el gran ejército (${event.knights} caballeros)`;
+      return { icon: '🛤', text: `Puso ${event.placed} camino(s) de la carta`, internal: true };
+
     case 'OfferCreated':
-      return `${nameOf(event.offer.from)} ofrece ${describeBundle(event.offer.give)} por ${describeBundle(event.offer.want)}`;
+      return {
+        icon: '🤝',
+        text: `${nameOf(event.offer.from)} ofrece ${describeBundle(
+          event.offer.give,
+        )} por ${describeBundle(event.offer.want)}`,
+      };
     case 'OfferResponded':
-      return `${nameOf(event.player)} ${event.response === 'accept' ? 'acepta' : 'rechaza'} la oferta`;
+      return {
+        icon: event.response === 'accept' ? '👍' : '👎',
+        text: `${nameOf(event.player)} ${event.response === 'accept' ? 'acepta' : 'rechaza'}`,
+      };
     case 'CounterOffered':
-      return `${nameOf(event.offer.from)} contraoferta: ${describeBundle(event.offer.give)} por ${describeBundle(event.offer.want)}`;
+      return {
+        icon: '🔁',
+        text: `${nameOf(event.offer.from)} contraoferta ${describeBundle(
+          event.offer.give,
+        )} por ${describeBundle(event.offer.want)}`,
+      };
     case 'OfferCancelled':
-      return 'Se cancela una oferta';
+      return { icon: '✖', text: 'Se cayó una oferta', internal: true };
     case 'TradeConfirmed':
-      return `${nameOf(event.from)} y ${nameOf(event.with)} cierran: ${describeBundle(event.give)} por ${describeBundle(event.want)}`;
+      return {
+        icon: '🤝',
+        text: `${nameOf(event.from)} y ${nameOf(event.with)} cerraron: ${describeBundle(
+          event.give,
+        )} por ${describeBundle(event.want)}`,
+      };
+
+    case 'LongestRoadChanged':
+      return {
+        icon: '🛣',
+        text:
+          event.owner === undefined
+            ? 'El camino más largo quedó vacante'
+            : `${nameOf(event.owner)} se lleva el camino más largo (${event.length} tramos)`,
+      };
+    case 'LargestArmyChanged':
+      return {
+        icon: '⚔',
+        text: `${nameOf(event.owner)} se lleva el gran ejército (${event.knights} caballeros)`,
+      };
+
     case 'PhaseChanged':
-      return `Fase: ${event.phase.kind}`;
+      return { icon: '⚙', text: `Fase: ${event.phase.kind}`, internal: true };
     case 'TurnEnded':
-      return `${nameOf(event.player)} termina su turno, sigue ${nameOf(event.next)}`;
+      return { icon: '⏭', text: `${nameOf(event.player)} terminó su turno`, internal: true };
     case 'GameWon':
-      return `¡Gana ${nameOf(event.player)} con ${event.points} PV (${event.revealedVpCards} cartas de PV)!`;
+      return {
+        icon: '🏆',
+        text: `¡Ganó ${nameOf(event.player)} con ${event.points} PV (${
+          event.revealedVpCards
+        } cartas escondidas)!`,
+      };
   }
+};
+
+/** The one-line form, for places with no room for an icon column. */
+export const eventText = (event: GameEvent, nameOf: (playerId: PlayerId) => string): string => {
+  const line = eventLine(event, { nameOf, hexLabel: (hex) => hex });
+  return `${line.icon} ${line.text}`;
 };

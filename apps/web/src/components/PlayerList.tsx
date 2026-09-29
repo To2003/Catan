@@ -6,6 +6,8 @@ interface PlayerListProps {
   readonly connected: (playerId: PlayerId) => boolean;
   /** Draw this player's longest route on the board while the pointer is on it. */
   readonly onHoverRoute: (playerId: PlayerId | undefined) => void;
+  /** What each player just gained, to float over their row for a moment. */
+  readonly gains: ReadonlyMap<PlayerId, string>;
 }
 
 /**
@@ -16,7 +18,7 @@ interface PlayerListProps {
  * enough to be confusing, so hovering draws the route on the board and, when
  * they differ, the tooltip says why.
  */
-export function PlayerList({ view, connected, onHoverRoute }: PlayerListProps) {
+export function PlayerList({ view, connected, onHoverRoute, gains }: PlayerListProps) {
   const roadTooltip = (playerId: PlayerId, roads: number, route: number): string => {
     const mine = playerId === view.you;
     if (roads === route) {
@@ -40,11 +42,22 @@ export function PlayerList({ view, connected, onHoverRoute }: PlayerListProps) {
         const hasRoad = view.longestRoad?.owner === id;
         const hasArmy = view.largestArmy === id;
 
+        const gain = gains.get(id);
+
         return (
           <li
             key={id}
-            className={`flex items-center gap-2 rounded px-2 py-1 ${isTurn ? 'bg-stone-700' : ''}`}
+            // The animation finds the row by this attribute: cards fly here.
+            data-player={id}
+            className={`relative flex items-center gap-2 rounded px-2 py-1 ${
+              isTurn ? 'bg-stone-700' : ''
+            }`}
           >
+            {gain === undefined ? null : (
+              <span className="ticker-rise pointer-events-none absolute -top-1 right-2 z-10 rounded bg-stone-900/90 px-1.5 py-0.5 text-[11px] font-bold text-verde shadow">
+                {gain}
+              </span>
+            )}
             <span
               className="inline-block size-3 shrink-0 rounded-full"
               style={{ backgroundColor: PLAYER_COLORS[player.color] }}

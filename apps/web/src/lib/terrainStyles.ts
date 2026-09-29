@@ -38,3 +38,12 @@ export const RESOURCE_TAGS: Record<Resource, string> = {
   wheat: 'TRI',
   ore: 'MIN',
 };
+
+/** One glyph per resource, for counters and cards in flight. */
+export const RESOURCE_ICONS: Record<Resource, string> = {
+  wood: '🌲',
+  brick: '🧱',
+  sheep: '🐑',
+  wheat: '🌾',
+  ore: '⛰️',
+};

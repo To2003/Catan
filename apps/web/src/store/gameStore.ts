@@ -12,6 +12,13 @@ import {
 } from '../lib/tokens.js';
 import { ERROR_TEXT } from '../lib/errorText.js';
 import { sounds } from '../lib/sounds.js';
+import { effectsFrom, mergeEffects, stillAlive, type Effect } from '../lib/effects.js';
+import {
+  readAnimationSpeed,
+  speedScale,
+  writeAnimationSpeed,
+  type AnimationSpeed,
+} from '../lib/animation.js';
 
 /**
  * Everything the client knows, which is only ever what the server told it.
@@ -44,6 +51,11 @@ interface ChatMessage {
 
 interface GameStore {
   connected: boolean;
+  /** Short-lived visuals derived from the events, never a source of truth. */
+  effects: Effect[];
+  animation: AnimationSpeed;
+  setAnimation: (speed: AnimationSpeed) => void;
+  pruneEffects: () => void;
   // `| undefined` rather than optional: exactOptionalPropertyTypes is on, and
   // these are cleared by being set back to undefined.
   playerId: string | undefined;
@@ -98,7 +110,16 @@ export const useGame = create<GameStore>((set, get) => {
     if (kinds.has('TradeConfirmed') || kinds.has('MaritimeTraded')) sounds.trade();
     if (kinds.has('GameWon')) sounds.win();
 
-    set((state) => ({ events: [...state.events, ...events] }));
+    set((state) => {
+      const you = state.view?.you;
+      const born = you === undefined ? [] : effectsFrom(events, you, speedScale(state.animation));
+      return {
+        events: [...state.events, ...events],
+        // A burst replaces what is on screen rather than piling up behind it,
+        // and a second roll takes over from the first.
+        effects: mergeEffects(state.effects, born),
+      };
+    });
   });
   socket.on('chat:message', (message: ChatMessage) => {
     set((state) => ({ chat: [...state.chat, message] }));
@@ -114,6 +135,18 @@ export const useGame = create<GameStore>((set, get) => {
 
   return {
     connected: socket.connected,
+    effects: [],
+    animation: readAnimationSpeed(),
+    setAnimation: (speed) => {
+      writeAnimationSpeed(speed);
+      set({ animation: speed, ...(speed === 'off' ? { effects: [] } : {}) });
+    },
+    pruneEffects: () => {
+      set((state) => {
+        const alive = stillAlive(state.effects);
+        return alive.length === state.effects.length ? {} : { effects: alive };
+      });
+    },
     playerId: undefined,
     room: undefined,
     view: undefined,

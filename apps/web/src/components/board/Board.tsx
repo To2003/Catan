@@ -72,7 +72,15 @@ export function Board({ board, robberHex, debug, interaction }: BoardProps) {
       <g>
         {board.hexIds.map((id) => {
           const hex = board.hexes[id];
-          return hex ? <Hex key={id} hex={hex} board={board} /> : null;
+          if (!hex) return null;
+          return (
+            <Hex
+              key={id}
+              hex={hex}
+              board={board}
+              pulsing={interaction?.pulsingHexes?.includes(id) ?? false}
+            />
+          );
         })}
       </g>
       <g>

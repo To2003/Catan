@@ -16,14 +16,20 @@ import { ResourceChoiceModal } from '../components/ResourceChoiceModal.js';
 import { OfferPanel } from '../components/OfferPanel.js';
 import { TradePanel } from '../components/TradePanel.js';
 import { Chat } from '../components/Chat.js';
+import { FlyingCards } from '../components/effects/FlyingCards.js';
+import { RollOverlay } from '../components/effects/RollOverlay.js';
+import { Toasts } from '../components/effects/Toasts.js';
+import { TurnBanner } from '../components/TurnBanner.js';
 import { EventLog } from '../components/EventLog.js';
 import { PlayerList } from '../components/PlayerList.js';
 import { RobberHint } from '../components/RobberHint.js';
 import { DiceRoll } from '../components/DiceRoll.js';
-import { isMuted, setMuted } from '../lib/sounds.js';
+import { isMuted, setMuted, sounds } from '../lib/sounds.js';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
-import { RESOURCE_LABELS } from '../lib/terrainStyles.js';
+import { RESOURCE_ICONS, RESOURCE_LABELS, TERRAIN_STYLES } from '../lib/terrainStyles.js';
+import { SPEED_LABELS, speedScale, type AnimationSpeed } from '../lib/animation.js';
 import { useGame } from '../store/gameStore.js';
+import { readDebugFromUrl } from '../lib/seed.js';
 import { FORCE_TURN_HINT_MS } from '../lib/timing.js';
 
 /**
@@ -41,7 +47,14 @@ export function GameScreen() {
   const forceTurn = useGame((state) => state.forceTurn);
   const chat = useGame((state) => state.chat);
   const sendChat = useGame((state) => state.sendChat);
+  const effects = useGame((state) => state.effects);
+  const animation = useGame((state) => state.animation);
+  const setAnimation = useGame((state) => state.setAnimation);
+  const pruneEffects = useGame((state) => state.pruneEffects);
   const [muted, setMutedState] = useState(isMuted);
+  // The engine's own bookkeeping in the log, behind the flag that already
+  // exists for board ids.
+  const debugLog = readDebugFromUrl();
 
   const [choosing, setChoosing] = useState<'yearOfPlenty' | 'monopoly' | null>(null);
   /** Which hex the pointer is over while the robber is being placed. */
@@ -64,6 +77,25 @@ export function GameScreen() {
       window.clearInterval(timer);
     };
   }, []);
+
+  /** A hex as somebody would say it out loud: "el bosque del 11". */
+  const hexLabel = useCallback(
+    (hex: string) => {
+      const tile = view?.board.hexes[hex as HexId];
+      if (!tile) return hex;
+      const terrain = TERRAIN_STYLES[tile.terrain].label.toLowerCase();
+      return tile.number === undefined ? `el ${terrain}` : `${terrain} del ${tile.number}`;
+    },
+    [view],
+  );
+
+  // Effects carry their own expiry; this is only the sweeper.
+  useEffect(() => {
+    const timer = window.setInterval(pruneEffects, 700);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [pruneEffects]);
 
   const nameOf = useCallback(
     (id: PlayerId) => view?.players.find((player) => player.id === id)?.name ?? id,
@@ -132,6 +164,21 @@ export function GameScreen() {
     [send],
   );
 
+  const myTurn = view?.currentPlayer === view?.you;
+
+  useEffect(() => {
+    if (!view) return;
+    document.title = myTurn ? '¡Tu turno! · Tierra Austral' : 'Tierra Austral';
+    return () => {
+      document.title = 'Tierra Austral';
+    };
+  }, [myTurn, view]);
+
+  useEffect(() => {
+    // A short nudge when the turn lands on you, for the tab in the background.
+    if (myTurn) sounds.turn();
+  }, [myTurn]);
+
   if (!view) return null;
 
   // How many rolls have been seen, so the dice replay their tumble each time.
@@ -168,6 +215,33 @@ export function GameScreen() {
       ? []
       : (view.players.find((player) => player.id === hoveredRoute)?.route ?? []);
 
+  const scale = speedScale(animation);
+  // The newest roll, never an older one that has not faded yet.
+  const roll = [...effects].reverse().find((effect) => effect.kind === 'roll');
+  const pulsingHexes = effects
+    .filter((effect) => effect.kind === 'produce')
+    .flatMap((effect) => effect.grants.map((grant) => grant.hex as HexId));
+
+  /** "+2 🌲 +1 🐑" over each player who just received something. */
+  const gains = new Map<string, string>();
+  for (const effect of effects) {
+    if (effect.kind !== 'produce') continue;
+    const perPlayer = new Map<string, Map<string, number>>();
+    for (const grant of effect.grants) {
+      const bundle = perPlayer.get(grant.player) ?? new Map<string, number>();
+      bundle.set(grant.resource, (bundle.get(grant.resource) ?? 0) + grant.amount);
+      perPlayer.set(grant.player, bundle);
+    }
+    for (const [playerId, bundle] of perPlayer) {
+      gains.set(
+        playerId,
+        [...bundle.entries()]
+          .map(([resource, amount]) => `+${amount} ${RESOURCE_ICONS[resource as Resource]}`)
+          .join(' '),
+      );
+    }
+  }
+
   const isMyTurn = view.currentPlayer === view.you;
   const owed = view.legalMoves.discardOwed;
   const blocked = room?.blockedBy;
@@ -196,7 +270,11 @@ export function GameScreen() {
   };
 
   return (
-    <main className="flex h-screen flex-col overflow-hidden bg-stone-900 text-stone-100">
+    <main
+      className={`flex h-screen flex-col overflow-hidden bg-stone-900 text-stone-100 ${
+        isMyTurn && scale > 0 ? 'turn-glow' : ''
+      }`}
+    >
       <header className="flex flex-wrap items-center gap-3 border-b border-stone-700 px-4 py-2">
         <h1 className="text-lg font-bold tracking-tight">Tierra Austral</h1>
         <span className="rounded bg-stone-800 px-2 py-1 font-mono text-xs">{room?.code}</span>
@@ -241,6 +319,22 @@ export function GameScreen() {
           >
             Terminar turno
           </button>
+          <label className="flex items-center gap-1 text-[11px] text-stone-400">
+            <span className="sr-only">Velocidad de las animaciones</span>
+            <select
+              value={animation}
+              onChange={(event) => {
+                setAnimation(event.target.value as AnimationSpeed);
+              }}
+              className="rounded bg-stone-700 px-1 py-1 text-xs"
+            >
+              {(['normal', 'fast', 'off'] as const).map((speed) => (
+                <option key={speed} value={speed}>
+                  {SPEED_LABELS[speed]}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
             aria-pressed={muted}
@@ -257,7 +351,20 @@ export function GameScreen() {
         </div>
       </header>
 
+      <TurnBanner view={view} nameOf={nameOf} />
+
       <div className="relative flex min-h-0 flex-1">
+        {roll ? (
+          <RollOverlay
+            dice={roll.dice}
+            player={roll.player}
+            nameOf={nameOf}
+            seven={roll.dice[0] + roll.dice[1] === 7}
+          />
+        ) : null}
+        <Toasts effects={effects} hexLabel={hexLabel} />
+        <FlyingCards effects={effects} colorOf={colorOf} scale={scale} />
+
         {owed !== undefined ? (
           <DiscardModal player={view.me} owed={owed} onConfirm={onDiscard} />
         ) : null}
@@ -296,6 +403,7 @@ export function GameScreen() {
               onHex,
               hoveredHex,
               onHexHover: setHoveredHex,
+              pulsingHexes,
               markedVertices,
               markedEdges,
             }}
@@ -317,6 +425,7 @@ export function GameScreen() {
                 room?.seats.find((seat) => seat.playerId === id)?.connected ?? true
               }
               onHoverRoute={setHoveredRoute}
+              gains={gains}
             />
           </div>
 
@@ -426,7 +535,12 @@ export function GameScreen() {
 
           <Chat messages={chat} nameOf={nameOf} colorOf={colorOf} onSend={sendChat} />
 
-          <EventLog events={events} you={view.you} nameOf={nameOf} debug={false} />
+          <EventLog
+            events={events}
+            you={view.you}
+            context={{ nameOf, hexLabel }}
+            debug={debugLog}
+          />
         </aside>
       </div>
     </main>
