@@ -591,6 +591,60 @@ SQLite, pulido y deploy.
 
 ---
 
+## Post-deploy — bugs, feedback, estética y reinicio ✅
+
+Cuatro tandas, en orden de prioridad, después de las primeras partidas reales con amigos.
+
+### 1. Bugs
+
+- **Scroll pegajoso** en chat y registro: siguen lo nuevo solo si ya estabas abajo; si subiste a
+  leer, no se mueve nada y aparece una pastilla con cuántas novedades hay. Contador de no leídos
+  con el chat cerrado. El truco para que no sea un `setState` dentro de un efecto: se ancla la
+  cantidad de items del momento en que te fuiste del fondo, y "no leídos" es una resta.
+- **El ladrón ya no tapa el tablero.** El tinte pasó a estar **debajo** de las piezas: se oscurece
+  el terreno y los pueblos y caminos quedan a plena opacidad y con borde. Al pasar por un hex, un
+  tooltip dice a quién le pega (nombre, color, cartas) y se marcan sus edificios. El hex donde ya
+  está el ladrón se dibuja como lo que es: el único que no se puede elegir.
+- **Camino más largo visible.** El panel muestra el **recorrido** de cada uno, no la cantidad de
+  caminos; al pasar el mouse se traza ese recorrido exacto en el tablero, y si tenés 6 caminos con
+  un recorrido de 4 el tooltip lo explica. El motor ganó `longestRoadPath`.
+
+### 2. Capa de feedback
+
+Todo sale de eventos que el motor ya emitía. Dados grandes al centro, hexes que pulsan, cartas que
+vuelan del hex a quien las recibió, contador flotante sobre cada jugador, aviso cuando el ladrón
+bloquea y **cartel explícito cuando el banco se queda sin un recurso** (la regla que nadie conoce y
+antes era invisible). Banner permanente con de quién es el turno y qué se espera; cuando te toca,
+borde, sonido y título de pestaña. El log pasó a estar escrito para personas, agrupado por turno,
+con las fases internas detrás del flag de debug.
+
+Las animaciones nunca bloquean: llevan vencimiento propio, la tirada nueva reemplaza a la vieja, y
+hay un control de velocidad con "sin animaciones" de primera clase.
+
+### 3. Estética
+
+Dirección visual escrita en [DESIGN.md](./DESIGN.md) **antes** de tocar componentes: materiales del
+sur (chapa, lenga, esmalte, basalto), fondo de noche patagónica en vez de negro, acentos en familia
+(ocre de estepa, rojo de lenga, azul glaciar) y dos tipografías de Omnibus-Type, un taller de Buenos
+Aires. Texturas SVG por terreno (que además hacen que el terreno no dependa solo del color), fichas
+de número como discos de esmalte, casas y ciudades con volumen, caminos con bisel. La mano dejó de
+ser una tabla de números: son cartas abanicadas abajo del tablero, y se eligen clickeando para
+descartar y para ofertar. Panel derecho ordenado por urgencia, con comercio, chat y registro en
+solapas.
+
+### 4. Reiniciar y previsualizar
+
+- **En el lobby**: el tablero que se va a jugar está a la vista y el host puede pedir otro.
+  Arrancar juega ese mismo tablero.
+- **En partida**: votación con unanimidad de los **conectados**, un "no" la corta al instante,
+  timeout de 60 s, y 5 minutos de espera para el que propuso y perdió. La partida sigue jugable
+  mientras tanto.
+- **Una sala pasa a tener varias partidas.** Reiniciar **archiva** la que estaba (semilla + acciones
+  enteras) y empieza una nueva; pisarla habría roto el replay. La revancha de M8 usa el mismo
+  camino, y la sala lleva un marcador de ganadas.
+
+---
+
 ## Decisiones tomadas sin consulta
 
 Pendientes de revisión. Todas se eligieron por el criterio "lo más conservador y consistente con el
