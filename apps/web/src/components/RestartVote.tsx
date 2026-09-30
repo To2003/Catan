@@ -34,7 +34,7 @@ export function RestartVote({ room, you, nameOf, onPropose, onVote, now }: Resta
             ? `Propusiste hace poco: podés volver a proponer en ${Math.ceil(waiting / 60)} min`
             : 'Proponer empezar de nuevo, con otro tablero'
         }
-        className="w-full rounded-panel bg-chapa px-2 py-1 text-xs font-semibold text-guanaco-apagado hover:bg-chapa-alta disabled:opacity-40"
+        className="w-full rounded-panel bg-chapa px-2 py-1 text-[13px] font-semibold text-guanaco-apagado hover:bg-chapa-alta disabled:opacity-40"
       >
         {waiting > 0 ? `Reiniciar (esperá ${Math.ceil(waiting / 60)} min)` : 'Proponer reiniciar'}
       </button>
@@ -47,11 +47,11 @@ export function RestartVote({ room, you, nameOf, onPropose, onVote, now }: Resta
   return (
     <div className="rounded-panel border border-estepa/60 bg-chapa p-2">
       <p className="text-[13px] font-semibold">{nameOf(vote.by)} propone empezar de nuevo</p>
-      <p className="text-[11px] text-guanaco-apagado">
+      <p className="text-[13px] text-guanaco-apagado">
         Hacen falta los {vote.needed.length} que están conectados · quedan {seconds}s
       </p>
 
-      <ul className="mt-1 space-y-0.5 text-[11px]">
+      <ul className="mt-1 space-y-0.5 text-[13px]">
         {vote.needed.map((playerId) => {
           const answer = vote.votes[playerId];
           return (
@@ -80,7 +80,7 @@ export function RestartVote({ room, you, nameOf, onPropose, onVote, now }: Resta
             onClick={() => {
               onVote(true);
             }}
-            className="flex-1 rounded-panel bg-verde px-2 py-1 text-xs font-semibold"
+            className="flex-1 rounded-panel bg-verde px-2 py-1 text-[13px] font-semibold"
           >
             Dale
           </button>
@@ -89,13 +89,13 @@ export function RestartVote({ room, you, nameOf, onPropose, onVote, now }: Resta
             onClick={() => {
               onVote(false);
             }}
-            className="flex-1 rounded-panel bg-lenga px-2 py-1 text-xs font-semibold"
+            className="flex-1 rounded-panel bg-lenga px-2 py-1 text-[13px] font-semibold"
           >
             No
           </button>
         </div>
       ) : (
-        <p className="mt-1 text-[11px] text-guanaco-apagado">
+        <p className="mt-1 text-[13px] text-guanaco-apagado">
           Votaste {mine === 'yes' ? 'a favor' : 'en contra'}
         </p>
       )}

@@ -30,14 +30,14 @@ export function DevCardPanel({ hand, deckLeft, moves, onBuy, onPlay }: DevCardPa
           type="button"
           disabled={!moves.canBuyDevCard}
           onClick={onBuy}
-          className="ml-auto rounded-panel bg-guanaco px-2 py-0.5 text-[11px] font-semibold text-noche disabled:opacity-30"
+          className="ml-auto rounded-panel bg-guanaco px-2 py-0.5 text-[13px] font-semibold text-noche disabled:opacity-30"
         >
           Comprar ({deckLeft})
         </button>
       </div>
 
       {hand.length === 0 ? (
-        <p className="text-xs text-guanaco-apagado">Todavía no compraste ninguna</p>
+        <p className="text-[13px] text-guanaco-apagado">Todavía no compraste ninguna</p>
       ) : (
         <div className="flex flex-wrap gap-1.5">
           {ORDER.filter((card) => hand.includes(card)).map((card) => {

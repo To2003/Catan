@@ -69,12 +69,12 @@ export function EventLog({ events, you, context, debug }: EventLogProps) {
         label={(count) => `${count} novedad${count === 1 ? '' : 'es'}`}
       >
         {lineCount === 0 ? (
-          <p className="text-[11px] text-stone-500">Todavía no pasó nada</p>
+          <p className="text-[13px] text-stone-500">Todavía no pasó nada</p>
         ) : (
-          <ol className="space-y-1.5 text-[11px] text-stone-300">
+          <ol className="space-y-1.5 text-[13px] text-stone-300">
             {turns.map((turn) => (
               <li key={turn.number}>
-                <p className="mb-0.5 border-b border-stone-700/70 pb-0.5 text-[10px] tracking-wider text-stone-500 uppercase">
+                <p className="mb-0.5 border-b border-stone-700/70 pb-0.5 text-[13px] tracking-wider text-stone-500 uppercase">
                   Turno {turn.number}
                   {turn.player === undefined ? '' : ` · ${context.nameOf(turn.player)}`}
                 </p>

@@ -39,7 +39,7 @@ export function Chat({ messages, nameOf, colorOf, onSend }: ChatProps) {
       >
         <span>Mensajes</span>
         {unread > 0 ? (
-          <span className="rounded-full bg-amarillo px-1.5 text-[10px] font-bold text-stone-900">
+          <span className="rounded-full bg-amarillo px-1.5 text-[13px] font-bold text-stone-900">
             {unread}
           </span>
         ) : null}
@@ -55,7 +55,7 @@ export function Chat({ messages, nameOf, colorOf, onSend }: ChatProps) {
               `${count} mensaje${count === 1 ? '' : 's'} nuevo${count === 1 ? '' : 's'}`
             }
           >
-            <ol className="space-y-0.5 text-[11px]">
+            <ol className="space-y-0.5 text-[13px]">
               {messages.length === 0 ? (
                 <li className="text-stone-500">Nadie dijo nada todavía</li>
               ) : (
@@ -88,11 +88,11 @@ export function Chat({ messages, nameOf, colorOf, onSend }: ChatProps) {
               onChange={(event) => {
                 setText(event.target.value);
               }}
-              className="min-w-0 flex-1 rounded bg-stone-800 px-2 py-1 text-xs"
+              className="min-w-0 flex-1 rounded bg-stone-800 px-2 py-1 text-[13px]"
             />
             <button
               type="submit"
-              className="rounded bg-stone-700 px-2 py-1 text-xs font-semibold hover:bg-stone-600"
+              className="rounded bg-stone-700 px-2 py-1 text-[13px] font-semibold hover:bg-stone-600"
             >
               Enviar
             </button>

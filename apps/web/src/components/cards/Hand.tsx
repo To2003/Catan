@@ -14,6 +14,19 @@ interface HandProps {
 const FAN_LIMIT = 12;
 
 /**
+ * The band the hand lives in, in pixels.
+ *
+ * It is fixed and reserved by the layout rather than measured from the cards:
+ * a card is 68px, lifting one picks it up 14px and fanning drops the outer
+ * ones about 14px, and if the band were any tighter the screen edge would cut
+ * the corner off the leftmost card.
+ */
+export const HAND_HEIGHT = 100;
+
+/** With nothing in hand there is nothing to reserve: one line, and the board gets the rest. */
+export const EMPTY_HAND_HEIGHT = 22;
+
+/**
  * Your hand, along the bottom of the board.
  *
  * It sits over the board rather than in the side panel because that is where
@@ -25,9 +38,12 @@ export function Hand({ hand, selected, onToggle, selectable }: HandProps) {
   const total = RESOURCES.reduce((sum, resource) => sum + hand[resource], 0);
   if (total === 0) {
     return (
-      <p className="pointer-events-none pb-1 text-center text-xs text-guanaco-apagado">
-        No tenés cartas
-      </p>
+      <div
+        style={{ height: EMPTY_HAND_HEIGHT }}
+        className="pointer-events-none flex items-center justify-center text-[13px] text-guanaco-apagado"
+      >
+        Sin cartas en la mano
+      </div>
     );
   }
 
@@ -50,7 +66,10 @@ export function Hand({ hand, selected, onToggle, selectable }: HandProps) {
   const middle = (cards.length - 1) / 2;
 
   return (
-    <div className="pointer-events-auto flex items-end justify-center gap-1 pb-1">
+    <div
+      style={{ height: HAND_HEIGHT }}
+      className="pointer-events-auto flex items-center justify-center gap-1"
+    >
       {cards.map((card, index) => {
         const offset = index - middle;
         const picked = selected[card.resource] ?? 0;

@@ -57,6 +57,14 @@ export const waitingFor = (view: PlayerView, nameOf: (playerId: PlayerId) => str
   }
 };
 
+/**
+ * Whose turn it is, as a pill inside the top bar.
+ *
+ * It used to be a bar of its own under the header. Two stacked strips of
+ * chrome cost the board thirty pixels of height, and height is the only thing
+ * limiting how big the board can be drawn, so the sentence moved up a row and
+ * kept its colour: yellow when the game is waiting on you, quiet otherwise.
+ */
 export function TurnBanner({ view, nameOf }: TurnBannerProps) {
   const mine = view.currentPlayer === view.you;
   const owedByMe = view.legalMoves.discardOwed !== undefined;
@@ -64,14 +72,14 @@ export function TurnBanner({ view, nameOf }: TurnBannerProps) {
 
   return (
     <div
-      className={`flex items-center gap-2 px-4 py-1.5 text-sm ${
-        urgent ? 'bg-amarillo font-semibold text-stone-900' : 'bg-stone-800 text-stone-300'
+      className={`flex min-w-0 items-center gap-2 rounded-panel px-2 py-1 text-sm ${
+        urgent ? 'bg-amarillo font-semibold text-stone-900' : 'text-guanaco-apagado'
       }`}
     >
       <span aria-hidden>{urgent ? '👉' : '⏳'}</span>
-      <span>{waitingFor(view, nameOf)}</span>
+      <span className="truncate">{waitingFor(view, nameOf)}</span>
       {view.phase.kind === 'discard' ? (
-        <span className="ml-auto flex gap-2 text-xs">
+        <span className="ml-auto flex gap-2 text-[13px]">
           {view.players.map((player) => {
             const owes = view.phase.kind === 'discard' ? view.phase.pending[player.id] : undefined;
             return (

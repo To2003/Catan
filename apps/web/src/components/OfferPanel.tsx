@@ -74,7 +74,7 @@ function WantPicker({
             setWant({ ...want, [resource]: Math.max(0, want[resource] - 1) });
           }}
           title={`${RESOURCE_LABELS[resource]} — clic para sumar, clic derecho para restar`}
-          className={`rounded-panel px-2 py-1 text-xs ${
+          className={`rounded-panel px-2 py-1 text-[13px] ${
             want[resource] > 0
               ? 'bg-guanaco text-noche font-semibold'
               : 'bg-chapa-alta text-guanaco'
@@ -130,14 +130,14 @@ export function OfferPanel({
 
       {moves.canCreateOffer ? (
         <div className="mb-2 rounded-panel bg-chapa p-2">
-          <p className="text-[11px] text-guanaco-apagado">
+          <p className="text-[13px] text-guanaco-apagado">
             Doy{' '}
             <span className="font-semibold text-guanaco">
               {giveTotal === 0 ? 'nada todavía — elegí cartas de tu mano' : describe(give)}
             </span>
           </p>
 
-          <p className="mt-1.5 mb-1 text-[11px] text-guanaco-apagado">Pido</p>
+          <p className="mt-1.5 mb-1 text-[13px] text-guanaco-apagado">Pido</p>
           <WantPicker want={want} setWant={setWant} />
 
           <div className="mt-2 flex items-center gap-2">
@@ -146,7 +146,7 @@ export function OfferPanel({
               onChange={(event) => {
                 setTo(event.target.value);
               }}
-              className="rounded-panel bg-chapa-alta px-1 py-0.5 text-xs"
+              className="rounded-panel bg-chapa-alta px-1 py-0.5 text-[13px]"
             >
               <option value="all">A todos</option>
               {players
@@ -165,34 +165,34 @@ export function OfferPanel({
                 onClearGive();
                 setWant(emptyPick());
               }}
-              className="ml-auto rounded-panel bg-guanaco px-2 py-1 text-xs font-semibold text-noche disabled:opacity-30"
+              className="ml-auto rounded-panel bg-guanaco px-2 py-1 text-[13px] font-semibold text-noche disabled:opacity-30"
             >
               Ofertar
             </button>
           </div>
 
           {overlapping ? (
-            <p className="mt-1 text-[10px] text-lenga">No podés dar y pedir el mismo recurso</p>
+            <p className="mt-1 text-[13px] text-lenga">No podés dar y pedir el mismo recurso</p>
           ) : null}
         </div>
       ) : null}
 
       {offers.length === 0 ? (
-        <p className="text-xs text-stone-500">No hay ofertas</p>
+        <p className="text-[13px] text-stone-500">No hay ofertas</p>
       ) : (
         <ul className="space-y-2">
           {offers.map((offer) => {
             const options = moves.offers[offer.id];
             const mine = offer.from === you;
             return (
-              <li key={offer.id} className="rounded bg-stone-800 p-2 text-xs">
+              <li key={offer.id} className="rounded bg-stone-800 p-2 text-[13px]">
                 <p>
                   <span className="font-semibold">{mine ? 'Vos' : nameOf(offer.from)}</span>
                   {offer.parentOfferId ? ' (contraoferta)' : ''}: da {describe(offer.give)} · pide{' '}
                   {describe(offer.want)}
                 </p>
 
-                <p className="mt-0.5 text-[10px] text-stone-400">
+                <p className="mt-0.5 text-[13px] text-stone-400">
                   {Object.entries(offer.responses)
                     .map(
                       ([playerId, response]) =>
@@ -270,9 +270,9 @@ export function OfferPanel({
 
                 {counteringId === offer.id ? (
                   <div className="mt-2 border-t border-stone-700 pt-2">
-                    <p className="mb-1 text-[10px] text-guanaco-apagado">Ofrezco</p>
+                    <p className="mb-1 text-[13px] text-guanaco-apagado">Ofrezco</p>
                     <WantPicker want={counterGive} setWant={setCounterGive} />
-                    <p className="mt-1.5 mb-1 text-[10px] text-guanaco-apagado">Y pido</p>
+                    <p className="mt-1.5 mb-1 text-[13px] text-guanaco-apagado">Y pido</p>
                     <WantPicker want={counterWant} setWant={setCounterWant} />
                     <button
                       type="button"

@@ -29,16 +29,16 @@ export function TradePanel({ rates, hand, bank, enabled, onTrade }: TradePanelPr
     <div>
       <h3 className="mb-1 text-[13px] font-semibold text-guanaco">Comercio con el banco</h3>
 
-      <ul className="mb-2 grid grid-cols-5 gap-1 text-center font-mono text-[11px]">
+      <ul className="mb-2 grid grid-cols-5 gap-1 text-center font-mono text-[13px]">
         {RESOURCES.map((resource) => (
           <li key={resource} className="rounded bg-stone-800 px-1 py-1">
-            <div className="text-[10px] text-stone-400">{RESOURCE_LABELS[resource]}</div>
+            <div className="text-[13px] text-stone-400">{RESOURCE_LABELS[resource]}</div>
             <div>{rates[resource]}:1</div>
           </li>
         ))}
       </ul>
 
-      <div className="flex items-center gap-2 text-xs">
+      <div className="flex items-center gap-2 text-[13px]">
         <label className="flex items-center gap-1">
           Doy
           <select
@@ -86,12 +86,12 @@ export function TradePanel({ rates, hand, bank, enabled, onTrade }: TradePanelPr
       </div>
 
       {enabled && give !== want && !canPay ? (
-        <p className="mt-1 text-[11px] text-stone-400">
+        <p className="mt-1 text-[13px] text-stone-400">
           Te faltan {rate - hand[give]} {RESOURCE_LABELS[give]}
         </p>
       ) : null}
       {enabled && !bankHas ? (
-        <p className="mt-1 text-[11px] text-stone-400">El banco no tiene {RESOURCE_LABELS[want]}</p>
+        <p className="mt-1 text-[13px] text-stone-400">El banco no tiene {RESOURCE_LABELS[want]}</p>
       ) : null}
     </div>
   );

@@ -14,6 +14,7 @@ import { NumberToken } from './NumberToken.js';
 import { Port } from './Port.js';
 import { Robber } from './Robber.js';
 import { TerrainPatterns } from './TerrainPatterns.js';
+import { useElementSize } from '../../lib/useElementSize.js';
 
 /** Everything the hot-seat adds on top of a plain board: pieces and legal spots. */
 export interface BoardInteraction {
@@ -45,96 +46,118 @@ interface BoardProps {
   readonly interaction?: BoardInteraction;
 }
 
-/** Margin around the board in unit space, leaving room for the harbour badges. */
-const PADDING = 1.2;
+/**
+ * Margin around the board in unit space: enough for the harbour badges and
+ * nothing more. Every extra unit here is board the screen does not get.
+ */
+const PADDING = 0.85;
 
-/** The board, drawn in unit space. The viewBox does all the scaling. */
+/**
+ * The board, drawn in unit space.
+ *
+ * The viewBox is stretched to the container's own proportions rather than
+ * letting the SVG letterbox itself: the board then sits centred and as large
+ * as the shorter side allows, with the leftover going into margin instead of
+ * into a smaller board.
+ */
 export function Board({ board, robberHex, debug, interaction }: BoardProps) {
+  const { ref, size } = useElementSize<HTMLDivElement>();
+
   const bounds = geometryBounds(board);
-  const minX = bounds.minX - PADDING;
-  const minY = bounds.minY - PADDING;
-  const width = bounds.maxX - bounds.minX + PADDING * 2;
-  const height = bounds.maxY - bounds.minY + PADDING * 2;
+  const boardWidth = bounds.maxX - bounds.minX + PADDING * 2;
+  const boardHeight = bounds.maxY - bounds.minY + PADDING * 2;
+
+  // Widen or heighten the window onto the board so its shape matches the box
+  // it is being drawn into.
+  const boxRatio = size.width > 0 && size.height > 0 ? size.width / size.height : 1;
+  const boardRatio = boardWidth / boardHeight;
+  const width = boxRatio > boardRatio ? boardHeight * boxRatio : boardWidth;
+  const height = boxRatio > boardRatio ? boardHeight : boardWidth / boxRatio;
+  const minX = bounds.minX - PADDING - (width - boardWidth) / 2;
+  const minY = bounds.minY - PADDING - (height - boardHeight) / 2;
 
   const robber = board.hexes[robberHex];
 
   return (
-    <svg
-      viewBox={`${minX} ${minY} ${width} ${height}`}
-      className="h-full w-full"
-      role="img"
-      aria-label="Tablero"
-    >
-      <TerrainPatterns />
-      <g>
-        {board.ports.map((port) => (
-          <Port key={port.edge} port={port} board={board} />
-        ))}
-      </g>
-      <g>
-        {board.hexIds.map((id) => {
-          const hex = board.hexes[id];
-          if (!hex) return null;
-          return (
-            <Hex
-              key={id}
-              hex={hex}
-              board={board}
-              pulsing={interaction?.pulsingHexes?.includes(id) ?? false}
-            />
-          );
-        })}
-      </g>
-      <g>
-        {board.hexIds.map((id) => {
-          const hex = board.hexes[id];
-          if (!hex || hex.number === undefined) return null;
-          return <NumberToken key={id} center={hex.center} value={hex.number} />;
-        })}
-      </g>
-      {/* Choosing a hex happens *under* the pieces: the tint dims terrain, and
+    <div ref={ref} className="h-full w-full">
+      <svg
+        viewBox={`${minX} ${minY} ${width} ${height}`}
+        className="h-full w-full"
+        preserveAspectRatio="xMidYMid meet"
+        role="img"
+        aria-label="Tablero"
+      >
+        <TerrainPatterns />
+        <g>
+          {board.ports.map((port) => (
+            <Port key={port.edge} port={port} board={board} />
+          ))}
+        </g>
+        <g>
+          {board.hexIds.map((id) => {
+            const hex = board.hexes[id];
+            if (!hex) return null;
+            return (
+              <Hex
+                key={id}
+                hex={hex}
+                board={board}
+                pulsing={interaction?.pulsingHexes?.includes(id) ?? false}
+              />
+            );
+          })}
+        </g>
+        <g>
+          {board.hexIds.map((id) => {
+            const hex = board.hexes[id];
+            if (!hex || hex.number === undefined) return null;
+            return <NumberToken key={id} center={hex.center} value={hex.number} />;
+          })}
+        </g>
+        {/* Choosing a hex happens *under* the pieces: the tint dims terrain, and
           what people built on it stays at full strength. */}
-      {interaction && interaction.legalHexes.length > 0 ? (
-        <HexTargets
-          board={board}
-          hexes={interaction.legalHexes}
-          blocked={robberHex}
-          hovered={interaction.hoveredHex}
-          onHex={interaction.onHex}
-          onHover={interaction.onHexHover ?? (() => undefined)}
-        />
-      ) : null}
+        {interaction && interaction.legalHexes.length > 0 ? (
+          <HexTargets
+            board={board}
+            hexes={interaction.legalHexes}
+            blocked={robberHex}
+            hovered={interaction.hoveredHex}
+            onHex={interaction.onHex}
+            onHover={interaction.onHexHover ?? (() => undefined)}
+          />
+        ) : null}
 
-      {interaction ? (
-        <Pieces
-          board={board}
-          buildings={interaction.buildings}
-          roads={interaction.roads}
-          colorOf={interaction.colorOf}
-          emphasis={interaction.legalHexes.length > 0}
-        />
-      ) : null}
+        {interaction ? (
+          <Pieces
+            board={board}
+            buildings={interaction.buildings}
+            roads={interaction.roads}
+            colorOf={interaction.colorOf}
+            emphasis={interaction.legalHexes.length > 0}
+          />
+        ) : null}
 
-      {interaction ? (
-        <Markers
-          board={board}
-          vertices={interaction.markedVertices ?? []}
-          edges={interaction.markedEdges ?? []}
-        />
-      ) : null}
+        {interaction ? (
+          <Markers
+            board={board}
+            vertices={interaction.markedVertices ?? []}
+            edges={interaction.markedEdges ?? []}
+          />
+        ) : null}
 
-      {robber ? <Robber center={robber.center} /> : null}
+        {robber ? <Robber center={robber.center} /> : null}
 
-      {interaction ? (
-        <SpotTargets
-          board={board}
-          vertices={interaction.legalVertices}
-          edges={interaction.legalEdges}
-          onVertex={interaction.onVertex}
-          onEdge={interaction.onEdge}
-        />
-      ) : null}
-      {debug ? <DebugOverlay board={board} /> : null}
-    </svg>
+        {interaction ? (
+          <SpotTargets
+            board={board}
+            vertices={interaction.legalVertices}
+            edges={interaction.legalEdges}
+            onVertex={interaction.onVertex}
+            onEdge={interaction.onEdge}
+          />
+        ) : null}
+        {debug ? <DebugOverlay board={board} /> : null}
+      </svg>
+    </div>
   );
 }

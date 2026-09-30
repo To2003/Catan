@@ -32,6 +32,26 @@ export function LobbyScreen() {
     room.seats.length >= MIN_PLAYERS &&
     room.seats.every((seat) => seat.ready && seat.color !== undefined);
 
+  /**
+   * The one thing standing between the room and a game.
+   *
+   * It used to read "3 de 4 · hacen falta 3" next to a greyed-out Arrancar,
+   * which is true and says nothing: a colour nobody picked keeps the button
+   * off and the line never mentioned it.
+   */
+  const missingColor = room.seats.filter((seat) => seat.color === undefined);
+  const notReady = room.seats.filter((seat) => seat.color !== undefined && !seat.ready);
+  const whatIsMissing =
+    room.seats.length < MIN_PLAYERS
+      ? `Son ${room.seats.length}: hacen falta ${MIN_PLAYERS - room.seats.length} más (mínimo ${MIN_PLAYERS}, máximo 4)`
+      : missingColor.length > 0
+        ? `Falta que elija color: ${missingColor.map((seat) => seat.name).join(', ')}`
+        : notReady.length > 0
+          ? `Falta que esté listo: ${notReady.map((seat) => seat.name).join(', ')}`
+          : isHost
+            ? 'Están todos: dale a Arrancar'
+            : `Están todos: espera que ${room.seats.find((seat) => seat.playerId === room.hostId)?.name ?? 'el anfitrión'} arranque`;
+
   return (
     <main className="flex h-screen flex-col items-center justify-center gap-6 bg-stone-900 text-stone-100">
       <div className="text-center">
@@ -144,9 +164,7 @@ export function LobbyScreen() {
         ) : null}
       </div>
 
-      <p className="text-xs text-stone-500">
-        {room.seats.length} de 4 · hacen falta {MIN_PLAYERS}
-      </p>
+      <p className="text-[13px] text-guanaco-apagado">{whatIsMissing}</p>
     </main>
   );
 }
