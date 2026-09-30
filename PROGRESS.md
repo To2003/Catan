@@ -645,29 +645,111 @@ solapas.
 
 ---
 
+---
+
+## Segunda pasada de UX — layout, rondas, chat de sala y modos de tablero ✅
+
+Cuatro partes, en el orden que pediste.
+
+### 1. Layout y claridad
+
+El tablero medía poco más de media pantalla y la mano quedaba cortada abajo. Las dos cosas eran la
+misma: nadie medía nada.
+
+- **El tablero mide su caja** con un `ResizeObserver` (`lib/useElementSize.ts`) y estira el
+  `viewBox` a la forma de esa caja, así llena el eje más corto en vez de quedar centrado y chico.
+  El margen del viewBox bajó de 1.2 a 0.85 unidades, lo justo para las insignias de los puertos.
+- **El bloque blanco cortado abajo a la izquierda era un naipe.** El abanico hunde las cartas de
+  los extremos con un `translateY` positivo, la mano estaba posicionada en absoluto contra el borde
+  inferior y la ventana le cortaba la esquina a la primera. Ahora la mano es una fila de la columna
+  con una banda de alto fijo (100px con cartas, 22px sin ellas), `h-dvh` en vez de `h-screen`, y
+  nada sobresale.
+- **El alto es lo único que limita al tablero**, así que la barra de turno se plegó adentro del
+  header como pastilla: treinta píxeles de cromo menos y, de paso, el mensaje de turno dejó de
+  estar duplicado. Medido en 1366×768, 1920×1080, 1024×768 y 820×1180: el tablero pasó de 440 a
+  507px de alto dibujado, y en ningún tamaño hay recorte ni scroll de página.
+- **Botones por fase**: dados solo en `preRoll`, fin de turno solo en `main`, ninguno de los dos
+  durante la preparación. Comercio y cartas de desarrollo dicen "Disponible cuando arranque la
+  partida" en vez de mostrar tres paneles de botones muertos. Las cartas de desarrollo tienen
+  pestaña propia.
+- **Legibilidad**: piso de 13px en todo el panel; los puntos de victoria son el número grande de
+  cada fila, en Chivo; los tres íconos pasaron a SVG —los emoji 🛣 ⚔ 🂠 caían en glifos ilegibles en
+  la máquina de prueba— con tooltip y una leyenda que se descarta una sola vez; el selector de
+  animaciones tiene etiqueta visible.
+- **Puertos**: los 2:1 se pintan del color de su recurso con su ícono, los 3:1 son un anillo
+  glaciar. Antes el 2:1 de mineral y el 3:1 eran el mismo gris.
+- De yapa, el lobby dice qué falta para arrancar en vez de "3 de 4 · hacen falta 3", que no
+  mencionaba los colores sin elegir, que era lo que tenía apagado el botón.
+
+### 2. Contador de rondas
+
+En el estado, no en la web: una recarga llega sin historial que contar.
+
+- `GameState.turn`: 0 durante toda la preparación, 1 cuando la serpiente termina, +1 en cada
+  `endTurn` — incluidos los forzados. La ronda se **deriva** del turno y de la cantidad de asientos.
+- El fuzz compara el contador contra los `TurnEnded` en cada paso. Un fixture de partida entera
+  guardada como la guarda el servidor (`test/fixtures/partida-vieja.json`) se replica y comprueba
+  que el contador sale bien sin que el archivo lo traiga.
+- El registro dejó de numerar sus propios turnos desde uno: cuenta hacia atrás desde el turno que
+  se está jugando, así acierta aunque el cliente se haya perdido el principio.
+
+### 3. Chat de sala
+
+- Las últimas 200 líneas viven con la sala, numeradas, en su propia tabla de SQLite y con la misma
+  limpieza de 24 h. Al entrar o al volver con el token llega `chat:history`.
+- El autor sale de la sesión del socket; el esquema acepta el texto y nada más.
+- Líneas de sistema sin autor y ya redactadas: entradas, vueltas, desconexiones, propuesta y
+  resultado del voto de reinicio, revancha y victoria. Todo se pinta como texto.
+- Un solo componente, en el lobby y en la pestaña del juego.
+
+### 4. Modos de tablero
+
+- `'random'` es el de siempre y **su salida no cambió**; el snapshot de M1 y un test explícito lo
+  pinnean, junto con el orden de turnos y el mazo que salen después.
+- `'classic'` sale de una tabla en `board/classic.ts` y no consume RNG.
+- `'balanced'` repite el sorteo hasta pasar cuatro controles. Calibrado sobre 1000 semillas.
+- `room:setBoardMode` (host, lobby, zod). El modo va en el estado, en la vista y en la sala, y lo
+  conservan el reinicio por voto y la revancha.
+
+**Bug encontrado de paso**: `CREATE TABLE IF NOT EXISTS` no agrega columnas a una base ya escrita,
+así que cualquier base anterior a `preview_seed` reventaba al arrancar con la primera sentencia que
+la nombrara. Lo encontré porque me pasó con una base vieja del scratchpad. Las columnas posteriores
+a la primera release ahora pasan por un `ALTER TABLE` idempotente, con un test que abre una base con
+el esquema viejo. **Si la base de Render es anterior a esas columnas, este arreglo es el que la
+deja arrancar.**
+
 ## Decisiones tomadas sin consulta
 
 Pendientes de revisión. Todas se eligieron por el criterio "lo más conservador y consistente con el
 SPEC", y ninguna rompe una regla de arquitectura.
 
-| #   | Tema                                                  | Qué elegí                                                                                              | Por qué                                                                                                                         |
-| --- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **Ofrecer lo que no tenés**                           | Al **crear** una oferta se exige que el proponente tenga las cartas, además de revalidar al confirmar  | El SPEC (§12.5) solo pide lados no vacíos y disjuntos. Permitir ofertas impagables llena la mesa de humo; es lo más restrictivo |
-| 2   | **Una respuesta por jugador**                         | `respondOffer` se puede mandar **una sola vez** por oferta (`ALREADY_RESPONDED`)                       | El SPEC no dice si se puede cambiar de opinión. Lo restrictivo es que no                                                        |
-| 3   | **Qué pasa con las demás ofertas al cerrar un trato** | Se cierra **solo** la oferta confirmada y sus contraofertas; las otras siguen abiertas                 | §4.9 enumera qué cancela ofertas (cancelar y fin de turno) y no incluye confirmar. Mínima intervención                          |
-| 4   | **Ids de oferta**                                     | `o<version>`                                                                                           | Determinista y reproducible; el engine no puede usar aleatoriedad para esto                                                     |
-| 5   | **Confirmar una contraoferta**                        | El activo la cierra directo, sin aceptación previa (§12.6), y `withPlayer` tiene que ser quien la hizo | §12.6 dice que se puede confirmar "como si fuera una oferta más"; la aceptación implícita es haberla propuesto                  |
-| 6   | **Empate sin titular en camino más largo**            | Si nadie tiene el bono y dos llegan a 5 a la vez, queda **vacante**                                    | §12.2 resuelve empates a vacante. En la práctica es inalcanzable (se recalcula por acción)                                      |
-| 7   | **La presencia no entra al replay**                   | `setConnected` es un helper puro, no una acción                                                        | Conectarse no es parte de la historia de la partida                                                                             |
-| 8   | **Revancha**                                          | Semilla nueva, lista de acciones vacía, mismos asientos y mismo host                                   | Una revancha es una partida nueva; nada del anterior se conserva                                                                |
-| 9   | **Chat adelantado a M6**                              | El relay mínimo entró con los límites                                                                  | Los límites que pediste no tenían qué limitar sin chat                                                                          |
-| 10  | **Sonidos sintetizados**                              | Web Audio, sin archivos                                                                                | Evita licencias y descargas; se puede reemplazar por samples sin tocar el resto                                                 |
+| #   | Tema                                                  | Qué elegí                                                                                              | Por qué                                                                                                                                                           |
+| --- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Ofrecer lo que no tenés**                           | Al **crear** una oferta se exige que el proponente tenga las cartas, además de revalidar al confirmar  | El SPEC (§12.5) solo pide lados no vacíos y disjuntos. Permitir ofertas impagables llena la mesa de humo; es lo más restrictivo                                   |
+| 2   | **Una respuesta por jugador**                         | `respondOffer` se puede mandar **una sola vez** por oferta (`ALREADY_RESPONDED`)                       | El SPEC no dice si se puede cambiar de opinión. Lo restrictivo es que no                                                                                          |
+| 3   | **Qué pasa con las demás ofertas al cerrar un trato** | Se cierra **solo** la oferta confirmada y sus contraofertas; las otras siguen abiertas                 | §4.9 enumera qué cancela ofertas (cancelar y fin de turno) y no incluye confirmar. Mínima intervención                                                            |
+| 4   | **Ids de oferta**                                     | `o<version>`                                                                                           | Determinista y reproducible; el engine no puede usar aleatoriedad para esto                                                                                       |
+| 5   | **Confirmar una contraoferta**                        | El activo la cierra directo, sin aceptación previa (§12.6), y `withPlayer` tiene que ser quien la hizo | §12.6 dice que se puede confirmar "como si fuera una oferta más"; la aceptación implícita es haberla propuesto                                                    |
+| 6   | **Empate sin titular en camino más largo**            | Si nadie tiene el bono y dos llegan a 5 a la vez, queda **vacante**                                    | §12.2 resuelve empates a vacante. En la práctica es inalcanzable (se recalcula por acción)                                                                        |
+| 7   | **La presencia no entra al replay**                   | `setConnected` es un helper puro, no una acción                                                        | Conectarse no es parte de la historia de la partida                                                                                                               |
+| 8   | **Revancha**                                          | Semilla nueva, lista de acciones vacía, mismos asientos y mismo host                                   | Una revancha es una partida nueva; nada del anterior se conserva                                                                                                  |
+| 9   | **Chat adelantado a M6**                              | El relay mínimo entró con los límites                                                                  | Los límites que pediste no tenían qué limitar sin chat                                                                                                            |
+| 10  | **Sonidos sintetizados**                              | Web Audio, sin archivos                                                                                | Evita licencias y descargas; se puede reemplazar por samples sin tocar el resto                                                                                   |
+| 11  | **Terrenos del tablero clásico**                      | Un reparto fijo propio, marcado como **pendiente de verificar** en `board/classic.ts`                  | Me pediste que no lo inventara si no estaba seguro. La espiral de números A–R sí es la del juego base; el reparto de terrenos no lo pude reproducir con confianza |
+| 12  | **Banda de pips del modo balanceado**                 | [0.72, 1.3] de la parte justa de cada recurso                                                          | Medido sobre 1000 semillas: corta más o menos el décimo peor de cada punta. Acepta 1 de cada 77, 2,2 ms por tablero                                               |
+| 13  | **El mensaje de turno queda arriba, no en el panel**  | Se plegó adentro del header y se sacó del panel lateral                                                | Pediste dejar uno solo; el de arriba es el que ya tenía el color de urgencia, y sacarlo del panel le devuelve 30px de alto al tablero                             |
+| 14  | **La preparación es un bloque sin número en el log**  | Se rotula "Preparación" en vez de "Turno 0"                                                            | El engine cuenta la preparación como turno 0; mostrar un cero no dice nada                                                                                        |
 
 ### Verificado de menos
 
 - **El deploy no se hizo** (necesita tus cuentas). Sí se verificó que el bundle de producción
   arranca, responde `/health` y **no** expone las rutas de desarrollo, y que la imagen se describe
   entera en el `Dockerfile`.
+- **El tablero clásico no está contrastado contra una caja de verdad.** Está marcado en el archivo
+  y arriba; corregí la tabla `TERRAINS` y no hace falta tocar nada más.
+- **El layout se midió en un Chrome headless**, no en un tablet real. Lo que se comprobó por
+  medición es que nada sobresale de la ventana y que no hay scroll de página en 1366×768,
+  1920×1080, 1024×768 y 820×1180.
 
 ---
 
