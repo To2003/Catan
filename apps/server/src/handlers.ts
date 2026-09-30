@@ -27,6 +27,7 @@ import {
   seatByToken,
   persistAction,
   persistRoom,
+  pushChat,
   recordWin,
   rerollPreview,
   restartGame,
@@ -138,6 +139,20 @@ export const registerHandlers = (io: GameServer): void => {
     }
   };
 
+  /** How a system line refers to somebody. */
+  const nameIn = (room: Room, playerId: PlayerId): string =>
+    seatOf(room, playerId)?.name ?? 'Alguien';
+
+  /**
+   * Adds a line to the room's conversation and sends it to everybody in it.
+   *
+   * System lines go through here too, so they are stored, numbered and
+   * trimmed exactly like anything a person typed: one history, one order.
+   */
+  const say = (room: Room, message: Parameters<typeof pushChat>[1]): void => {
+    io.to(room.code).emit('chat:message', pushChat(room, message));
+  };
+
   /**
    * Resolves an open vote if it can be.
    *
@@ -159,6 +174,12 @@ export const registerHandlers = (io: GameServer): void => {
       room.restartCooldown[vote.by] = Date.now() + RESTART_COOLDOWN_MS;
       delete room.restartVote;
       clearVoteTimer(room.code);
+      say(room, {
+        kind: 'system',
+        text: refused
+          ? 'No hubo acuerdo: la partida sigue'
+          : 'Se venció el tiempo del voto: la partida sigue',
+      });
       return;
     }
 
@@ -166,6 +187,7 @@ export const registerHandlers = (io: GameServer): void => {
       delete room.restartVote;
       clearVoteTimer(room.code);
       restartGame(room);
+      say(room, { kind: 'system', text: 'Votaron todos que sí: empieza una partida nueva' });
     }
   };
 
@@ -208,7 +230,10 @@ export const registerHandlers = (io: GameServer): void => {
 
     // The room keeps a scoreboard across its games.
     for (const event of result.events) {
-      if (event.type === 'GameWon') recordWin(room, event.player);
+      if (event.type === 'GameWon') {
+        recordWin(room, event.player);
+        say(room, { kind: 'system', text: `Ganó ${nameIn(room, event.player)}` });
+      }
     }
 
     sendEvents(io, room, connections, result.events);
@@ -232,6 +257,7 @@ export const registerHandlers = (io: GameServer): void => {
 
       // The token goes to its owner's socket and nowhere else, ever.
       socket.emit('session', { playerId: seat.playerId, token: seat.token, code: room.code });
+      socket.emit('chat:history', room.chat);
       persistRoom(room);
       publish(room);
     });
@@ -283,6 +309,12 @@ export const registerHandlers = (io: GameServer): void => {
       room.lastActivity = Date.now();
 
       socket.emit('session', { playerId: seat.playerId, token: seat.token, code: room.code });
+      // Whoever just arrived reads the room before anyone says anything else.
+      socket.emit('chat:history', room.chat);
+      say(room, {
+        kind: 'system',
+        text: existing ? `${seat.name} volvió` : `${seat.name} entró a la sala`,
+      });
       persistRoom(room);
       publish(room);
     });
@@ -482,6 +514,10 @@ export const registerHandlers = (io: GameServer): void => {
         votes: { [playerId]: 'yes' },
       };
       scheduleVoteTimeout(room);
+      say(room, {
+        kind: 'system',
+        text: `${nameIn(room, playerId)} propuso empezar de nuevo`,
+      });
       settleVote(room);
       publish(room);
     });
@@ -529,6 +565,7 @@ export const registerHandlers = (io: GameServer): void => {
 
       void queue.run(session.room.code, () => {
         restartGame(session.room);
+        say(session.room, { kind: 'system', text: 'Revancha: arranca otra partida' });
         publish(session.room);
       });
     });
@@ -549,11 +586,11 @@ export const registerHandlers = (io: GameServer): void => {
         return;
       }
 
-      io.to(session.room.code).emit('chat:message', {
-        from: session.playerId,
-        text: parsed.data.text,
-        at: Date.now(),
-      });
+      // The author comes from the socket's session. The payload carries the
+      // text and nothing else, so nobody can sign a message with a name that
+      // is not theirs.
+      say(session.room, { kind: 'player', from: session.playerId, text: parsed.data.text });
+      session.room.lastActivity = Date.now();
     });
 
     socket.on('disconnect', () => {
@@ -578,6 +615,7 @@ export const registerHandlers = (io: GameServer): void => {
       }
 
       migrateHost(session.room);
+      if (seat) say(session.room, { kind: 'system', text: `${seat.name} se desconectó` });
       publish(session.room);
     });
   });

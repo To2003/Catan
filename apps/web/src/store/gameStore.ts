@@ -55,10 +55,20 @@ export interface RoomState {
   readonly restartCooldown: Readonly<Record<string, number>>;
 }
 
-interface ChatMessage {
-  readonly from: string;
-  readonly text: string;
+/**
+ * A line in the room's conversation.
+ *
+ * It mirrors the server's shape exactly. The chat belongs to the room, so
+ * nothing here is ever cleared by a game starting, restarting or being played
+ * again — only by walking into a different room.
+ */
+export interface ChatMessage {
+  readonly id: number;
   readonly at: number;
+  readonly kind: 'player' | 'system';
+  /** Absent on system lines. */
+  readonly from?: string;
+  readonly text: string;
 }
 
 interface GameStore {
@@ -75,6 +85,15 @@ interface GameStore {
   view: PlayerView | undefined;
   events: GameEvent[];
   chat: ChatMessage[];
+  /**
+   * How much of the conversation has been looked at, as a count.
+   *
+   * It lives here rather than in the screen because the history arrives from
+   * the server after the screen has mounted: a panel counting from zero would
+   * greet everybody who reconnects with two hundred unread messages.
+   */
+  chatSeen: number;
+  markChatSeen: () => void;
   error: string | undefined;
   createRoom: (name: string) => void;
   joinRoom: (code: string, name: string) => void;
@@ -141,7 +160,14 @@ export const useGame = create<GameStore>((set, get) => {
     });
   });
   socket.on('chat:message', (message: ChatMessage) => {
-    set((state) => ({ chat: [...state.chat, message] }));
+    set((state) =>
+      // A reconnection can deliver a line that the history already carried.
+      state.chat.some((line) => line.id === message.id) ? {} : { chat: [...state.chat, message] },
+    );
+  });
+  socket.on('chat:history', (messages: ChatMessage[]) => {
+    // Arriving in a room is not the same as missing what was said before it.
+    set({ chat: messages, chatSeen: messages.length });
   });
   socket.on('game:error', (error: { code: string; message: string }) => {
     // Engine codes get the wording the UI already has; transport codes arrive
@@ -172,15 +198,21 @@ export const useGame = create<GameStore>((set, get) => {
     error: undefined,
     events: [],
     chat: [],
+    chatSeen: 0,
+    markChatSeen: () => {
+      set((state) => ({ chatSeen: state.chat.length }));
+    },
 
     createRoom: (name) => {
       writeName(name);
-      set({ error: undefined, events: [] });
+      // A different room is a different conversation; the server sends the
+      // history for this one right after the session.
+      set({ error: undefined, events: [], chat: [], chatSeen: 0 });
       socket.emit('room:create', { name });
     },
     joinRoom: (code, name) => {
       writeName(name);
-      set({ error: undefined, events: [] });
+      set({ error: undefined, events: [], chat: [], chatSeen: 0 });
       const token = readToken(code);
       socket.emit('room:join', { code: code.toUpperCase(), name, ...(token ? { token } : {}) });
     },

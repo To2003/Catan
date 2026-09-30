@@ -89,6 +89,26 @@ export interface ClientToServer {
   'chat:send': (payload: unknown) => void;
 }
 
+/**
+ * A line in a room's conversation.
+ *
+ * The chat belongs to the room, not to the game: it survives a start, a
+ * restart, a rematch and a reconnection, because the people talking are the
+ * same people. `from` is resolved by the server from the socket's session and
+ * never read off the payload.
+ *
+ * System lines carry no author and arrive with their wording already decided,
+ * so what is stored is what is shown. Everything renders as plain text.
+ */
+export interface ChatMessage {
+  /** Monotonic within a room: the order to show them in, and a stable key. */
+  readonly id: number;
+  readonly at: number;
+  readonly kind: 'player' | 'system';
+  readonly from?: PlayerId;
+  readonly text: string;
+}
+
 /** What the server remembers about a socket: the whole of a player's identity. */
 export interface SocketData {
   code?: string;
@@ -102,5 +122,7 @@ export interface ServerToClient {
   'game:state': (view: PlayerView) => void;
   'game:events': (events: readonly GameEvent[]) => void;
   'game:error': (error: ErrorPayload) => void;
-  'chat:message': (message: { from: PlayerId; text: string; at: number }) => void;
+  'chat:message': (message: ChatMessage) => void;
+  /** The whole conversation, on joining or coming back. */
+  'chat:history': (messages: readonly ChatMessage[]) => void;
 }

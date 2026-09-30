@@ -6,7 +6,7 @@ import { registerHandlers, type GameServer } from '../src/handlers.js';
 import { MAX_MESSAGE_BYTES } from '../src/limits.js';
 import { resetRooms, restoreRooms, useStore } from '../src/rooms.js';
 import { sqliteStore, type Store } from '../src/persistence.js';
-import type { ErrorPayload, RoomState } from '../src/protocol.js';
+import type { ChatMessage, ErrorPayload, RoomState } from '../src/protocol.js';
 
 /**
  * A real server on an ephemeral port with real socket.io clients.
@@ -25,6 +25,10 @@ export interface TestClient {
   view?: PlayerView;
   readonly errors: ErrorPayload[];
   readonly events: unknown[];
+  /** The conversation as this client sees it: history first, then arrivals. */
+  chat: ChatMessage[];
+  /** How many `chat:history` payloads this socket was sent. */
+  histories: number;
   /** Everything this client was ever sent, for the secret-leak checks. */
   readonly received: { event: string; payload: unknown }[];
 }
@@ -66,7 +70,15 @@ export const startHarness = async (options: { db?: string } = {}): Promise<Harne
     io,
     async connect(name: string): Promise<TestClient> {
       const socket = connect(url, { transports: ['websocket'], forceNew: true });
-      const client: TestClient = { socket, name, errors: [], events: [], received: [] };
+      const client: TestClient = {
+        socket,
+        name,
+        errors: [],
+        events: [],
+        received: [],
+        chat: [],
+        histories: 0,
+      };
 
       socket.onAny((event: string, payload: unknown) => {
         client.received.push({ event, payload });
@@ -86,6 +98,13 @@ export const startHarness = async (options: { db?: string } = {}): Promise<Harne
       });
       socket.on('game:error', (error: ErrorPayload) => {
         client.errors.push(error);
+      });
+      socket.on('chat:history', (messages: ChatMessage[]) => {
+        client.histories += 1;
+        client.chat = [...messages];
+      });
+      socket.on('chat:message', (message: ChatMessage) => {
+        if (!client.chat.some((line) => line.id === message.id)) client.chat.push(message);
       });
 
       await new Promise<void>((resolve, reject) => {

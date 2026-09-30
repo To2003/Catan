@@ -50,6 +50,8 @@ export function GameScreen() {
   const voteRestart = useGame((state) => state.voteRestart);
   const chat = useGame((state) => state.chat);
   const sendChat = useGame((state) => state.sendChat);
+  const chatSeen = useGame((state) => state.chatSeen);
+  const markChatSeen = useGame((state) => state.markChatSeen);
   const effects = useGame((state) => state.effects);
   const animation = useGame((state) => state.animation);
   const setAnimation = useGame((state) => state.setAnimation);
@@ -74,11 +76,6 @@ export function GameScreen() {
    */
   const [picked, setPicked] = useState<Partial<ResourceBundle>>({});
   const [tab, setTab] = useState<'cartas' | 'comercio' | 'chat' | 'registro'>('cartas');
-  /**
-   * How many messages had arrived when the chat tab was last open; unread is a
-   * subtraction from that.
-   */
-  const [chatSeen, setChatSeen] = useState(0);
 
   // A ticking clock, so the force-turn button lights up on its own rather than
   // reading the wall clock while rendering. The server is the one that enforces
@@ -567,7 +564,8 @@ export function GameScreen() {
                   title={name === 'cartas' ? 'Cartas de desarrollo' : undefined}
                   onClick={() => {
                     setTab(name);
-                    if (name === 'chat') setChatSeen(chat.length);
+                    // Leaving the tab also settles what was read while it was open.
+                    if (name === 'chat' || tab === 'chat') markChatSeen();
                   }}
                   className={`flex-1 rounded-panel px-1.5 py-1 text-[13px] font-semibold capitalize ${
                     tab === name ? 'bg-chapa-alta text-guanaco' : 'bg-chapa text-guanaco-apagado'
@@ -639,7 +637,16 @@ export function GameScreen() {
                 />
               </div>
             ) : tab === 'chat' ? (
-              <Chat messages={chat} nameOf={nameOf} colorOf={colorOf} onSend={sendChat} />
+              // The tab is the toggle, and the badge on it is the unread mark,
+              // so the panel does not need a second one inside.
+              <Chat
+                messages={chat}
+                nameOf={nameOf}
+                colorOf={colorOf}
+                onSend={sendChat}
+                collapsible={false}
+                height="max-h-64"
+              />
             ) : (
               <EventLog
                 events={events}

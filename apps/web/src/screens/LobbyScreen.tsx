@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { MIN_PLAYERS, generateBoard, type PlayerColor } from '@tierra-austral/engine';
 import { useGame } from '../store/gameStore.js';
+import { Chat } from '../components/Chat.js';
 import { PLAYER_COLORS, PLAYER_COLOR_LABELS } from '../lib/playerColors.js';
 import { Board } from '../components/board/Board.js';
 
@@ -15,6 +16,8 @@ export function LobbyScreen() {
   const start = useGame((state) => state.start);
   const newBoard = useGame((state) => state.newBoard);
   const error = useGame((state) => state.error);
+  const chat = useGame((state) => state.chat);
+  const sendChat = useGame((state) => state.sendChat);
 
   // The lobby draws the board from the seed the server is showing everybody.
   // Generating it here is not a rule decision: it is the same pure function
@@ -53,7 +56,7 @@ export function LobbyScreen() {
             : `Están todos: espera que ${room.seats.find((seat) => seat.playerId === room.hostId)?.name ?? 'el anfitrión'} arranque`;
 
   return (
-    <main className="flex h-screen flex-col items-center justify-center gap-6 bg-stone-900 text-stone-100">
+    <main className="flex min-h-dvh flex-col items-center justify-center gap-6 overflow-y-auto bg-stone-900 py-6 text-stone-100">
       <div className="text-center">
         <h1 className="font-display text-2xl">Sala</h1>
         <p className="font-display text-4xl tracking-[0.3em]">{room.code}</p>
@@ -84,87 +87,107 @@ export function LobbyScreen() {
 
       {error ? <p className="rounded bg-bordo px-3 py-1.5 text-sm font-semibold">{error}</p> : null}
 
-      <ul className="w-80 space-y-1">
-        {room.seats.map((seat) => (
-          <li
-            key={seat.playerId}
-            className="flex items-center gap-2 rounded bg-stone-800 px-3 py-2 text-sm"
-          >
-            <span
-              className="inline-block size-3 rounded-full border border-stone-600"
-              style={{
-                backgroundColor: seat.color
-                  ? PLAYER_COLORS[seat.color as PlayerColor]
-                  : 'transparent',
-              }}
-            />
-            <span>{seat.name}</span>
-            {room.hostId === seat.playerId ? (
-              <span className="text-[10px] text-stone-400">host</span>
-            ) : null}
-            {!seat.connected ? (
-              <span className="text-[10px] text-stone-500">desconectado</span>
-            ) : null}
-            {(room.wins[seat.playerId] ?? 0) > 0 ? (
-              <span
-                title={`${room.wins[seat.playerId] ?? 0} ganada(s) en esta sala`}
-                className="font-display text-[11px] text-estepa"
+      {/* The room's conversation sits next to the room's people, and stays
+          exactly where it is once the game starts. */}
+      <div className="flex w-full max-w-3xl flex-col items-center gap-6 lg:flex-row lg:items-start lg:justify-center">
+        <div className="flex w-80 flex-col gap-4">
+          <ul className="w-80 space-y-1">
+            {room.seats.map((seat) => (
+              <li
+                key={seat.playerId}
+                className="flex items-center gap-2 rounded bg-stone-800 px-3 py-2 text-sm"
               >
-                🏆 {room.wins[seat.playerId] ?? 0}
-              </span>
-            ) : null}
-            <span className="ml-auto text-xs">{seat.ready ? 'listo' : '…'}</span>
-          </li>
-        ))}
-      </ul>
+                <span
+                  className="inline-block size-3 rounded-full border border-stone-600"
+                  style={{
+                    backgroundColor: seat.color
+                      ? PLAYER_COLORS[seat.color as PlayerColor]
+                      : 'transparent',
+                  }}
+                />
+                <span>{seat.name}</span>
+                {room.hostId === seat.playerId ? (
+                  <span className="text-[10px] text-stone-400">host</span>
+                ) : null}
+                {!seat.connected ? (
+                  <span className="text-[10px] text-stone-500">desconectado</span>
+                ) : null}
+                {(room.wins[seat.playerId] ?? 0) > 0 ? (
+                  <span
+                    title={`${room.wins[seat.playerId] ?? 0} ganada(s) en esta sala`}
+                    className="font-display text-[11px] text-estepa"
+                  >
+                    🏆 {room.wins[seat.playerId] ?? 0}
+                  </span>
+                ) : null}
+                <span className="ml-auto text-xs">{seat.ready ? 'listo' : '…'}</span>
+              </li>
+            ))}
+          </ul>
 
-      <div className="flex w-80 flex-wrap gap-2">
-        {COLORS.map((color) => {
-          const taken = room.seats.some(
-            (seat) => seat.color === color && seat.playerId !== playerId,
-          );
-          return (
+          <div className="flex w-80 flex-wrap gap-2">
+            {COLORS.map((color) => {
+              const taken = room.seats.some(
+                (seat) => seat.color === color && seat.playerId !== playerId,
+              );
+              return (
+                <button
+                  key={color}
+                  type="button"
+                  disabled={taken}
+                  onClick={() => {
+                    setColor(color);
+                  }}
+                  className={`flex-1 rounded px-2 py-1.5 text-xs font-semibold disabled:opacity-25 ${
+                    me?.color === color ? 'ring-2 ring-white' : ''
+                  }`}
+                  style={{ backgroundColor: PLAYER_COLORS[color], color: '#12100e' }}
+                >
+                  {PLAYER_COLOR_LABELS[color]}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex w-80 gap-2">
             <button
-              key={color}
               type="button"
-              disabled={taken}
               onClick={() => {
-                setColor(color);
+                setReady(!me?.ready);
               }}
-              className={`flex-1 rounded px-2 py-1.5 text-xs font-semibold disabled:opacity-25 ${
-                me?.color === color ? 'ring-2 ring-white' : ''
-              }`}
-              style={{ backgroundColor: PLAYER_COLORS[color], color: '#12100e' }}
+              className="flex-1 rounded bg-stone-700 px-3 py-2 font-semibold hover:bg-stone-600"
             >
-              {PLAYER_COLOR_LABELS[color]}
+              {me?.ready ? 'No estoy listo' : 'Estoy listo'}
             </button>
-          );
-        })}
-      </div>
+            {isHost ? (
+              <button
+                type="button"
+                disabled={!everyoneReady}
+                onClick={start}
+                className="flex-1 rounded bg-stone-100 px-3 py-2 font-semibold text-stone-900 disabled:opacity-30"
+              >
+                Arrancar
+              </button>
+            ) : null}
+          </div>
 
-      <div className="flex w-80 gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            setReady(!me?.ready);
-          }}
-          className="flex-1 rounded bg-stone-700 px-3 py-2 font-semibold hover:bg-stone-600"
-        >
-          {me?.ready ? 'No estoy listo' : 'Estoy listo'}
-        </button>
-        {isHost ? (
-          <button
-            type="button"
-            disabled={!everyoneReady}
-            onClick={start}
-            className="flex-1 rounded bg-stone-100 px-3 py-2 font-semibold text-stone-900 disabled:opacity-30"
-          >
-            Arrancar
-          </button>
-        ) : null}
-      </div>
+          <p className="text-[13px] text-guanaco-apagado">{whatIsMissing}</p>
+        </div>
 
-      <p className="text-[13px] text-guanaco-apagado">{whatIsMissing}</p>
+        <div className="w-80 rounded-panel bg-chapa p-3 lg:w-96">
+          <Chat
+            messages={chat}
+            nameOf={(id) => room.seats.find((seat) => seat.playerId === id)?.name ?? id}
+            colorOf={(id) => {
+              const color = room.seats.find((seat) => seat.playerId === id)?.color;
+              return color === undefined ? '#ffffff' : PLAYER_COLORS[color as PlayerColor];
+            }}
+            onSend={sendChat}
+            collapsible={false}
+            height="h-56"
+          />
+        </div>
+      </div>
     </main>
   );
 }

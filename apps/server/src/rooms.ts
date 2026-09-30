@@ -9,7 +9,7 @@ import {
   type PlayerId,
   type ReadonlyGameState,
 } from '@tierra-austral/engine';
-import type { PublicSeat, RoomState } from './protocol.js';
+import type { ChatMessage, PublicSeat, RoomState } from './protocol.js';
 import { memoryStore, type Store } from './persistence.js';
 
 /**
@@ -74,7 +74,45 @@ export interface Room {
   restartVote?: RestartVote;
   /** When each player may propose a restart again, after one was turned down. */
   restartCooldown: Record<PlayerId, number>;
+  /**
+   * The conversation. It belongs to the room, so a start, a restart, a
+   * rematch and a reconnection all leave it alone; only the room's own 24h
+   * cleanup takes it away.
+   */
+  chat: ChatMessage[];
+  /** Next id to hand out. Kept past the trim so ids never repeat. */
+  nextChatId: number;
 }
+
+/**
+ * How much of the conversation a room keeps.
+ *
+ * Enough that nobody scrolling back loses the trade they were arguing about,
+ * and little enough that a room is still cheap to hold and to send on a join.
+ */
+export const CHAT_HISTORY = 200;
+
+/** Adds a line and drops the oldest once the room is over its limit. */
+export const pushChat = (
+  room: Room,
+  message: Omit<ChatMessage, 'id' | 'at'> & { at?: number },
+): ChatMessage => {
+  const stored: ChatMessage = {
+    id: room.nextChatId,
+    at: message.at ?? Date.now(),
+    kind: message.kind,
+    ...(message.from === undefined ? {} : { from: message.from }),
+    text: message.text,
+  };
+  room.nextChatId += 1;
+  room.chat.push(stored);
+
+  const overflow = room.chat.length - CHAT_HISTORY;
+  if (overflow > 0) room.chat.splice(0, overflow);
+
+  store.appendChat(room.code, stored, room.chat[0]?.id ?? stored.id);
+  return stored;
+};
 
 const rooms = new Map<string, Room>();
 
@@ -133,6 +171,8 @@ export const restoreRooms = (): { restored: number; failed: string[] } => {
       games: stored.games.map((game) => ({ ...game })),
       wins: { ...stored.wins },
       restartCooldown: {},
+      chat: [...stored.chat],
+      nextChatId: (stored.chat[stored.chat.length - 1]?.id ?? 0) + 1,
       seats: stored.seats.map((seat) => ({
         playerId: seat.playerId,
         name: seat.name,
@@ -229,6 +269,8 @@ export const createRoom = (hostName: string): { room: Room; seat: Seat } => {
     games: [],
     wins: {},
     restartCooldown: {},
+    chat: [],
+    nextChatId: 1,
   };
   rooms.set(code, room);
   return { room, seat };

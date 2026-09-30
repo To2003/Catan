@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module';
 import type { Action, PlayerColor, PlayerId } from '@tierra-austral/engine';
+import type { ChatMessage } from './protocol.js';
 
 /**
  * Persistence: `seed` plus the list of actions, per room.
@@ -65,12 +66,22 @@ export interface StoredRoom {
   /** Games already finished in this room, oldest first. */
   readonly games: StoredGame[];
   readonly wins: Readonly<Record<PlayerId, number>>;
+  /** The room's conversation, oldest first. */
+  readonly chat: ChatMessage[];
 }
 
 export interface Store {
-  saveRoom(room: Omit<StoredRoom, 'actions' | 'games'>): void;
+  saveRoom(room: Omit<StoredRoom, 'actions' | 'games' | 'chat'>): void;
   archiveGame(code: string, index: number, game: StoredGame): void;
   appendAction(code: string, index: number, playerId: PlayerId, action: Action): void;
+  /**
+   * Stores one chat line and forgets everything before `keepFrom`.
+   *
+   * The chat lives next to the room and goes away with it, so a server that
+   * sleeps — which the free tier does, nightly — wakes up with the
+   * conversation intact rather than with an empty panel.
+   */
+  appendChat(code: string, message: ChatMessage, keepFrom: number): void;
   loadRooms(): StoredRoom[];
   /** Forgets the running game's moves, keeping the room and its archive. */
   clearActions(code: string): void;
@@ -84,6 +95,7 @@ export const memoryStore = (): Store => ({
   saveRoom: () => undefined,
   archiveGame: () => undefined,
   appendAction: () => undefined,
+  appendChat: () => undefined,
   loadRooms: () => [],
   clearActions: () => undefined,
   deleteRoom: () => undefined,
@@ -115,6 +127,15 @@ export const sqliteStore = (path: string): Store => {
       ended_at INTEGER NOT NULL,
       PRIMARY KEY (code, idx)
     );
+    CREATE TABLE IF NOT EXISTS chat (
+      code TEXT NOT NULL,
+      id INTEGER NOT NULL,
+      at INTEGER NOT NULL,
+      kind TEXT NOT NULL,
+      author TEXT,
+      text TEXT NOT NULL,
+      PRIMARY KEY (code, id)
+    );
     CREATE TABLE IF NOT EXISTS actions (
       code TEXT NOT NULL,
       idx INTEGER NOT NULL,
@@ -144,6 +165,12 @@ export const sqliteStore = (path: string): Store => {
   const insertAction = db.prepare(
     'INSERT OR REPLACE INTO actions (code, idx, player_id, action) VALUES (?, ?, ?, ?)',
   );
+  const insertChat = db.prepare(
+    'INSERT OR REPLACE INTO chat (code, id, at, kind, author, text) VALUES (?, ?, ?, ?, ?, ?)',
+  );
+  const trimChat = db.prepare('DELETE FROM chat WHERE code = ? AND id < ?');
+  const selectChat = db.prepare('SELECT * FROM chat WHERE code = ? ORDER BY id');
+  const removeChat = db.prepare('DELETE FROM chat WHERE code = ?');
   const selectRooms = db.prepare('SELECT * FROM rooms ORDER BY created_at');
   const selectActions = db.prepare('SELECT * FROM actions WHERE code = ? ORDER BY idx');
   const removeRoom = db.prepare('DELETE FROM rooms WHERE code = ?');
@@ -178,6 +205,18 @@ export const sqliteStore = (path: string): Store => {
 
     appendAction(code, index, playerId, action) {
       insertAction.run(code, index, playerId, JSON.stringify(action));
+    },
+
+    appendChat(code, message, keepFrom) {
+      insertChat.run(
+        code,
+        message.id,
+        message.at,
+        message.kind,
+        message.from ?? null,
+        message.text,
+      );
+      trimChat.run(code, keepFrom);
     },
 
     loadRooms() {
@@ -215,6 +254,22 @@ export const sqliteStore = (path: string): Store => {
           endedAt: game.ended_at,
         }));
 
+        const chat = (
+          selectChat.all(row.code) as {
+            id: number;
+            at: number;
+            kind: string;
+            author: string | null;
+            text: string;
+          }[]
+        ).map((line) => ({
+          id: line.id,
+          at: line.at,
+          kind: line.kind === 'system' ? ('system' as const) : ('player' as const),
+          ...(line.author === null ? {} : { from: line.author }),
+          text: line.text,
+        }));
+
         return {
           code: row.code,
           seed: row.seed ?? undefined,
@@ -227,6 +282,7 @@ export const sqliteStore = (path: string): Store => {
           previewSeed: row.preview_seed,
           games,
           wins: JSON.parse(row.wins) as Record<PlayerId, number>,
+          chat,
         };
       });
     },
@@ -238,6 +294,7 @@ export const sqliteStore = (path: string): Store => {
     deleteRoom(code) {
       removeActions.run(code);
       removeArchived.run(code);
+      removeChat.run(code);
       removeRoom.run(code);
     },
 
@@ -246,6 +303,7 @@ export const sqliteStore = (path: string): Store => {
       for (const code of codes) {
         removeActions.run(code);
         removeArchived.run(code);
+        removeChat.run(code);
         removeRoom.run(code);
       }
       return codes;

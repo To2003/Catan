@@ -1,56 +1,78 @@
 import { useState } from 'react';
 import type { PlayerId } from '@tierra-austral/engine';
+import type { ChatMessage } from '../store/gameStore.js';
 import { MAX_CHAT_LENGTH } from '../lib/timing.js';
 import { ScrollPane } from './ScrollPane.js';
 
 interface ChatProps {
-  readonly messages: readonly { from: PlayerId; text: string; at: number }[];
+  readonly messages: readonly ChatMessage[];
   readonly nameOf: (id: PlayerId) => string;
   readonly colorOf: (id: PlayerId) => string;
   readonly onSend: (text: string) => void;
+  /**
+   * Off in the lobby, where the chat is a panel of its own and there is
+   * nothing to fold it away from.
+   */
+  readonly collapsible?: boolean;
+  /** How tall the list may grow. The lobby has room; the side panel does not. */
+  readonly height?: string;
 }
 
 /**
- * The room's chat.
+ * The room's conversation, in the lobby and in the game.
  *
- * Collapsing keeps the panel short during a busy turn; the badge is there so
- * folding it away does not mean missing that somebody asked you for wheat.
+ * One component in both places because it is one conversation: starting a
+ * game, voting to start over and playing a rematch all leave it where it was.
+ * Everything renders as text — a message is a string the server handed over,
+ * never markup.
  */
-export function Chat({ messages, nameOf, colorOf, onSend }: ChatProps) {
+export function Chat({
+  messages,
+  nameOf,
+  colorOf,
+  onSend,
+  collapsible = true,
+  height = 'max-h-28',
+}: ChatProps) {
   const [text, setText] = useState('');
   const [open, setOpen] = useState(true);
   // Set when collapsing, so "unread" is a subtraction rather than a counter
   // that has to be kept in step with arrivals.
   const [seenAt, setSeenAt] = useState(messages.length);
 
-  const unread = open ? 0 : Math.max(0, messages.length - seenAt);
+  const unread = open || !collapsible ? 0 : Math.max(0, messages.length - seenAt);
+  const showing = open || !collapsible;
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={() => {
-          setOpen((current) => {
-            if (current) setSeenAt(messages.length);
-            return !current;
-          });
-        }}
-        className="mb-1 flex w-full items-center gap-2 text-[13px] font-semibold text-guanaco"
-      >
-        <span>Mensajes</span>
-        {unread > 0 ? (
-          <span className="rounded-full bg-amarillo px-1.5 text-[13px] font-bold text-stone-900">
-            {unread}
-          </span>
-        ) : null}
-        <span className="ml-auto text-stone-500">{open ? '▾' : '▸'}</span>
-      </button>
+      {collapsible ? (
+        <button
+          type="button"
+          onClick={() => {
+            setOpen((current) => {
+              if (current) setSeenAt(messages.length);
+              return !current;
+            });
+          }}
+          className="mb-1 flex w-full items-center gap-2 text-[13px] font-semibold text-guanaco"
+        >
+          <span>Mensajes</span>
+          {unread > 0 ? (
+            <span className="rounded-full bg-amarillo px-1.5 text-[13px] font-bold text-stone-900">
+              {unread}
+            </span>
+          ) : null}
+          <span className="ml-auto text-stone-500">{open ? '▾' : '▸'}</span>
+        </button>
+      ) : (
+        <h2 className="mb-1 text-[13px] font-semibold text-guanaco">Mensajes</h2>
+      )}
 
-      {open ? (
+      {showing ? (
         <>
           <ScrollPane
             itemCount={messages.length}
-            className="max-h-28 overflow-y-auto pr-1"
+            className={`${height} overflow-y-auto pr-1`}
             label={(count) =>
               `${count} mensaje${count === 1 ? '' : 's'} nuevo${count === 1 ? '' : 's'}`
             }
@@ -59,14 +81,20 @@ export function Chat({ messages, nameOf, colorOf, onSend }: ChatProps) {
               {messages.length === 0 ? (
                 <li className="text-stone-500">Nadie dijo nada todavía</li>
               ) : (
-                messages.map((message) => (
-                  <li key={`${message.at}-${message.from}`}>
-                    <span className="font-semibold" style={{ color: colorOf(message.from) }}>
-                      {nameOf(message.from)}:
-                    </span>{' '}
-                    {message.text}
-                  </li>
-                ))
+                messages.map((message) =>
+                  message.kind === 'system' || message.from === undefined ? (
+                    <li key={message.id} className="text-guanaco-apagado italic">
+                      {message.text}
+                    </li>
+                  ) : (
+                    <li key={message.id}>
+                      <span className="font-semibold" style={{ color: colorOf(message.from) }}>
+                        {nameOf(message.from)}:
+                      </span>{' '}
+                      {message.text}
+                    </li>
+                  ),
+                )
               )}
             </ol>
           </ScrollPane>
@@ -88,11 +116,11 @@ export function Chat({ messages, nameOf, colorOf, onSend }: ChatProps) {
               onChange={(event) => {
                 setText(event.target.value);
               }}
-              className="min-w-0 flex-1 rounded bg-stone-800 px-2 py-1 text-[13px]"
+              className="min-w-0 flex-1 rounded-panel bg-chapa-alta px-2 py-1 text-[13px] placeholder:text-guanaco-apagado"
             />
             <button
               type="submit"
-              className="rounded bg-stone-700 px-2 py-1 text-[13px] font-semibold hover:bg-stone-600"
+              className="rounded-panel bg-guanaco px-2 py-1 text-[13px] font-semibold text-noche"
             >
               Enviar
             </button>

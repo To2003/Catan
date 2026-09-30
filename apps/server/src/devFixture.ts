@@ -183,6 +183,8 @@ export const createFixtureRoom = (back = 1): Fixture => {
 
     const code = `DEV${randomInt(10)}${randomInt(10)}`;
     const room: Room = {
+      chat: [],
+      nextChatId: 1,
       code,
       seats,
       hostId: seats[0]?.playerId ?? '',

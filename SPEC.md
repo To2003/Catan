@@ -442,9 +442,12 @@ Se hace un DFS sobre las aristas del jugador, arrancando desde cada vértice ext
 | `game:state`       | `PlayerView` filtrado para ese jugador                    |
 | `game:events`      | eventos nuevos para animaciones y log                     |
 | `game:error`       | `{ code, message }`                                       |
-| `chat:message`     | `{ from, text, at }`                                      |
+| `chat:message`     | `{ id, at, kind, from?, text }`                           |
+| `chat:history`     | las últimas 200 líneas, al entrar o al volver             |
 | `session`          | `{ playerId, token, code }` — **solo a su propio socket** |
 | `session:replaced` | — (el mismo token entró desde otra pestaña)               |
+
+- **El chat es de la sala, no de la partida.** Sobrevive al arranque, al reinicio por voto, a la revancha y a la reconexión, y se va con la sala en la limpieza de 24 h. La sala guarda las últimas 200 líneas en SQLite, así que un servidor que se duerme no se lleva la conversación puesta. El autor lo resuelve el servidor desde la sesión del socket: el payload trae el texto y nada más. Las líneas de sistema (entradas, salidas, votos de reinicio, victoria) no tienen autor y se guardan ya redactadas. Todo se muestra como texto plano.
 
 - El servidor es **autoritativo**: el cliente nunca modifica el estado localmente, solo manda acciones.
 - **`expectedVersion` se chequea solo en las acciones secuenciales del jugador activo.** Las acciones concurrentes de jugadores no activos (`discard` hoy; `respondOffer` y `counterOffer` desde M7) no lo exigen: cuando dos jugadores descartan casi a la vez, el primero sube la versión y el segundo recibiría `STALE_STATE` por una jugada perfectamente válida. El engine valida cada acción contra el estado del momento en que se aplica, así que ahí la versión no aporta nada.
