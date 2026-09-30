@@ -44,6 +44,13 @@ export interface StoredSeat {
   readonly color?: PlayerColor;
   readonly ready: boolean;
   readonly token: string;
+  /**
+   * Arrival order, from 1. Absent in rows written before it existed, where
+   * the stored order of the seats is the best evidence of it.
+   */
+  readonly joined?: number;
+  /** Final states only; absent means the seat is still somebody's. */
+  readonly gone?: 'left' | 'kicked';
 }
 
 /** A game that is over: kept whole, because a room can hold several. */
@@ -76,6 +83,8 @@ export interface StoredRoom {
   readonly wins: Readonly<Record<PlayerId, number>>;
   /** The room's conversation, oldest first. */
   readonly chat: ChatMessage[];
+  /** Tokens that may not reconnect: thrown out, or walked out for good. */
+  readonly blockedTokens: string[];
 }
 
 export interface Store {
@@ -140,7 +149,8 @@ export const sqliteStore = (path: string): Store => {
       seats TEXT NOT NULL,
       preview_seed INTEGER NOT NULL DEFAULT 0,
       wins TEXT NOT NULL DEFAULT '{}',
-      board_mode TEXT NOT NULL DEFAULT 'random'
+      board_mode TEXT NOT NULL DEFAULT 'random',
+      blocked_tokens TEXT NOT NULL DEFAULT '[]'
     );
     CREATE TABLE IF NOT EXISTS archived_games (
       code TEXT NOT NULL,
@@ -174,10 +184,11 @@ export const sqliteStore = (path: string): Store => {
   addColumn(db, 'rooms', 'preview_seed', 'INTEGER NOT NULL DEFAULT 0');
   addColumn(db, 'rooms', 'wins', "TEXT NOT NULL DEFAULT '{}'");
   addColumn(db, 'rooms', 'board_mode', "TEXT NOT NULL DEFAULT 'random'");
+  addColumn(db, 'rooms', 'blocked_tokens', "TEXT NOT NULL DEFAULT '[]'");
 
   const upsertRoom = db.prepare(`
-    INSERT INTO rooms (code, seed, host_id, started, created_at, last_activity, seats, preview_seed, wins, board_mode)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO rooms (code, seed, host_id, started, created_at, last_activity, seats, preview_seed, wins, board_mode, blocked_tokens)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(code) DO UPDATE SET
       seed = excluded.seed,
       host_id = excluded.host_id,
@@ -186,7 +197,8 @@ export const sqliteStore = (path: string): Store => {
       seats = excluded.seats,
       preview_seed = excluded.preview_seed,
       wins = excluded.wins,
-      board_mode = excluded.board_mode
+      board_mode = excluded.board_mode,
+      blocked_tokens = excluded.blocked_tokens
   `);
   const insertArchived = db.prepare(
     'INSERT OR REPLACE INTO archived_games (code, idx, seed, actions, winner, ended_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -221,6 +233,7 @@ export const sqliteStore = (path: string): Store => {
         room.previewSeed,
         JSON.stringify(room.wins),
         room.boardMode,
+        JSON.stringify(room.blockedTokens),
       );
     },
 
@@ -263,6 +276,7 @@ export const sqliteStore = (path: string): Store => {
         preview_seed: number;
         wins: string;
         board_mode: string | null;
+        blocked_tokens: string | null;
       }[];
 
       return rows.map((row) => {
@@ -315,6 +329,7 @@ export const sqliteStore = (path: string): Store => {
           previewSeed: row.preview_seed,
           // A room saved before modes existed was played on the random one.
           boardMode: (row.board_mode ?? 'random') as BoardMode,
+          blockedTokens: JSON.parse(row.blocked_tokens ?? '[]') as string[],
           games,
           wins: JSON.parse(row.wins) as Record<PlayerId, number>,
           chat,

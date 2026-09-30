@@ -6,6 +6,9 @@ import {
   type PlayerId,
 } from '@tierra-austral/engine';
 import { FORCE_TURN_DELAY_MS, forcedAction, isBlocking } from './blocking.js';
+
+/** Below this many players still in it, a game is over (SPEC.md §7.1). */
+const MIN_PLAYERS_TO_CONTINUE = 2;
 import {
   sendEvents,
   sendRoomState,
@@ -22,14 +25,19 @@ import {
   createRoom,
   getRoom,
   migrateHost,
-  newSeat,
+  seatSomebody,
   roomIsFull,
   seatByToken,
   persistAction,
   persistRoom,
   pushChat,
+  abandonGame,
   dropRoom,
+  presentSeats,
   recordWin,
+  retireSeat,
+  roomIsEmpty,
+  type Seat,
   removeSeat,
   rerollPreview,
   restartGame,
@@ -41,6 +49,7 @@ import {
   actionMessageSchema,
   boardModeSchema,
   chatSchema,
+  targetSchema,
   createRoomSchema,
   voteSchema,
   joinRoomSchema,
@@ -77,6 +86,9 @@ const MESSAGES: Record<TransportError, string> = {
   NO_VOTE: 'No hay ninguna votación',
   ALREADY_VOTED: 'Ya votaste',
   ON_COOLDOWN: 'Hay que esperar para volver a proponer',
+  TARGET_NOT_FOUND: 'Ese jugador no está en la sala',
+  CANNOT_TARGET_SELF: 'No podés hacerte eso a vos mismo',
+  KICKED: 'Ya no podés volver a esta sala',
   TOO_SOON: 'Todavía no pasaron los 2 minutos',
 };
 
@@ -168,7 +180,11 @@ export const registerHandlers = (io: GameServer): void => {
     const vote = room.restartVote;
     if (!vote) return;
 
-    const here = room.seats.filter((seat) => seat.connected).map((seat) => seat.playerId);
+    // Somebody who walked out does not get a vote, and does not get to hold
+    // one up either.
+    const here = presentSeats(room)
+      .filter((seat) => seat.connected)
+      .map((seat) => seat.playerId);
     const refused = Object.values(vote.votes).includes('no');
     const expired = Date.now() >= vote.deadline;
     const everyone = here.every((playerId) => vote.votes[playerId] === 'yes');
@@ -240,8 +256,112 @@ export const registerHandlers = (io: GameServer): void => {
     }
 
     sendEvents(io, room, connections, result.events);
+    playOutTheAbsent(room);
+    endIfTooFewLeft(room);
     publish(room);
     return undefined;
+  };
+
+  /**
+   * Plays for everybody who walked out, right now.
+   *
+   * The two-minute wait exists for somebody whose train went into a tunnel.
+   * Somebody who pressed "abandonar para siempre" is not coming back, so
+   * making the table wait for them is just making the table wait. Each move
+   * goes through `apply`'s own path below, so it lands in the action list and
+   * a replay reproduces the game exactly.
+   */
+  const playOutTheAbsent = (room: Room): void => {
+    for (let guard = 0; guard < 200; guard += 1) {
+      const state = room.state;
+      if (!state || state.phase.kind === 'gameOver') return;
+
+      const stuck = room.seats.find(
+        (seat) => seat.gone !== undefined && isBlocking(state, seat.playerId),
+      );
+      if (!stuck) return;
+
+      const action = forcedAction(state, stuck.playerId);
+      if (!action) return;
+
+      const result = applyAction(state, stuck.playerId, action);
+      if (!result.ok) return;
+
+      room.state = result.state;
+      room.actions.push({ playerId: stuck.playerId, action });
+      persistAction(room, room.actions.length - 1, stuck.playerId, action);
+      for (const event of result.events) {
+        if (event.type === 'GameWon') {
+          recordWin(room, event.player);
+          say(room, { kind: 'system', text: `Ganó ${nameIn(room, event.player)}` });
+        }
+      }
+      sendEvents(io, room, connections, result.events);
+    }
+  };
+
+  /**
+   * A game with fewer than two people in it is not a game.
+   *
+   * It ends with no winner and the room goes back to the lobby, so whoever is
+   * left can start another one. Nothing is added to the scoreboard: nobody
+   * won it.
+   */
+  const endIfTooFewLeft = (room: Room): void => {
+    if (!room.started || !room.state) return;
+    const playing = presentSeats(room).length;
+    if (playing >= MIN_PLAYERS_TO_CONTINUE) return;
+
+    abandonGame(room);
+    say(room, {
+      kind: 'system',
+      text: 'Quedaron menos de dos jugadores: la partida se cortó y volvimos a la sala',
+    });
+  };
+
+  /**
+   * The seat a host action is aimed at, or nothing plus a refusal.
+   *
+   * Everything a host does to somebody else goes through here, so the four
+   * checks — real payload, real session, actually the host, a real seat that
+   * is not your own — are written once and cannot drift apart.
+   */
+  const targetOf = (
+    socket: GameSocket,
+    payload: unknown,
+  ): { room: Room; seat: Seat } | undefined => {
+    const parsed = targetSchema.safeParse(payload);
+    if (!parsed.success) {
+      fail(socket, 'BAD_PAYLOAD');
+      return undefined;
+    }
+    const session = sessionOf(socket);
+    if (!session) {
+      fail(socket, 'NO_SESSION');
+      return undefined;
+    }
+    if (session.room.hostId !== session.playerId) {
+      fail(socket, 'NOT_HOST');
+      return undefined;
+    }
+    if (parsed.data.target === session.playerId) {
+      fail(socket, 'CANNOT_TARGET_SELF');
+      return undefined;
+    }
+    const seat = seatOf(session.room, parsed.data.target);
+    if (!seat || seat.gone !== undefined) {
+      fail(socket, 'TARGET_NOT_FOUND');
+      return undefined;
+    }
+    return { room: session.room, seat };
+  };
+
+  /** A vote cannot outlive a change in who is voting. */
+  const cancelVoteOn = (room: Room, because: string): void => {
+    if (!room.restartVote) return;
+    delete room.restartVote;
+    clearVoteTimer(room.code);
+    say(room, { kind: 'system', text: `Se canceló la votación: ${because}` });
   };
 
   io.on('connection', (socket: GameSocket) => {
@@ -279,7 +399,17 @@ export const registerHandlers = (io: GameServer): void => {
         return;
       }
 
+      // Thrown out, or walked out for good: the token is spent either way.
+      if (token !== undefined && room.blockedTokens.includes(token)) {
+        fail(socket, 'KICKED');
+        return;
+      }
+
       const existing = token ? seatByToken(room, token) : undefined;
+      if (existing?.gone !== undefined) {
+        fail(socket, 'KICKED');
+        return;
+      }
 
       // A game in progress is only open to someone coming back with their own
       // token: no walk-ins, and no taking over a seat with a guessed one.
@@ -292,8 +422,7 @@ export const registerHandlers = (io: GameServer): void => {
         return;
       }
 
-      const seat = existing ?? newSeat(name);
-      if (!existing) room.seats.push(seat);
+      const seat = existing ?? seatSomebody(room, name);
 
       // The last connection wins: a second tab takes the seat over.
       const previous = connections.get(seat.playerId);
@@ -560,6 +689,106 @@ export const registerHandlers = (io: GameServer): void => {
       }
 
       socket.emit('room:left', { seatKept });
+    });
+
+    /**
+     * Walking out of a game for good.
+     *
+     * The seat stays on the board — the pieces are part of a game everybody
+     * else played — but it stops being anybody's: the token is spent, the
+     * turns get played automatically, and trades stop reaching it.
+     */
+    socket.on('room:leaveForGood', () => {
+      const session = sessionOf(socket);
+      if (!session) {
+        fail(socket, 'NO_SESSION');
+        return;
+      }
+      const { room, playerId } = session;
+      if (!room.started || !room.state) {
+        fail(socket, 'GAME_NOT_STARTED');
+        return;
+      }
+
+      const name = nameIn(room, playerId);
+      connections.delete(playerId);
+      void socket.leave(room.code);
+      socket.data = {};
+
+      void queue.run(room.code, () => {
+        // The engine has to see it: from here on, offers to everybody stop
+        // including them, which is a rule and therefore part of the replay.
+        apply(room, playerId, { type: 'leaveGame' });
+        retireSeat(room, playerId, 'left');
+        cancelVoteOn(room, `${name} abandonó la partida`);
+        migrateHost(room);
+        say(room, { kind: 'system', text: `${name} abandonó la partida` });
+
+        if (roomIsEmpty(room)) {
+          dropRoom(room.code);
+        } else {
+          playOutTheAbsent(room);
+          endIfTooFewLeft(room);
+          persistRoom(room);
+          publish(room);
+        }
+      });
+
+      socket.emit('room:left', { seatKept: false });
+    });
+
+    socket.on('room:kick', (payload: unknown) => {
+      const target = targetOf(socket, payload);
+      if (!target) return;
+      const { room, seat } = target;
+      const kicked = connections.get(seat.playerId);
+
+      void queue.run(room.code, () => {
+        if (room.started && room.state) {
+          // Same as walking out: the game keeps the pieces and plays the turns.
+          apply(room, seat.playerId, { type: 'leaveGame' });
+          retireSeat(room, seat.playerId, 'kicked');
+        } else {
+          removeSeat(room, seat.playerId);
+          if (!room.blockedTokens.includes(seat.token)) room.blockedTokens.push(seat.token);
+        }
+
+        connections.delete(seat.playerId);
+        cancelVoteOn(room, `${seat.name} fue expulsado`);
+        migrateHost(room);
+        say(room, { kind: 'system', text: `${seat.name} fue expulsado` });
+
+        if (roomIsEmpty(room)) {
+          dropRoom(room.code);
+        } else {
+          playOutTheAbsent(room);
+          endIfTooFewLeft(room);
+          persistRoom(room);
+          publish(room);
+        }
+      });
+
+      // Told to their face, and then the door is shut.
+      if (kicked !== undefined) {
+        io.to(kicked).emit('room:kicked');
+        const theirs = io.sockets.sockets.get(kicked);
+        if (theirs) {
+          void theirs.leave(room.code);
+          theirs.data = {};
+        }
+      }
+    });
+
+    socket.on('room:transferHost', (payload: unknown) => {
+      const target = targetOf(socket, payload);
+      if (!target) return;
+      const { room, seat } = target;
+
+      room.hostId = seat.playerId;
+      room.lastActivity = Date.now();
+      say(room, { kind: 'system', text: `${seat.name} es el nuevo host` });
+      persistRoom(room);
+      publish(room);
     });
 
     socket.on('room:proposeRestart', () => {

@@ -35,6 +35,8 @@ export interface RoomSeat {
   readonly color?: string;
   readonly ready: boolean;
   readonly connected: boolean;
+  /** Active, away, walked out for good, or thrown out. */
+  readonly state: 'active' | 'disconnected' | 'left' | 'kicked';
 }
 
 export interface RestartVoteState {
@@ -125,6 +127,15 @@ interface GameStore {
    * token still brings you back to it.
    */
   leaveRoom: (options?: { readonly forget?: boolean }) => void;
+  /** Walk out of a game and never come back: the seat is spent with you. */
+  leaveForGood: () => void;
+  kick: (target: string) => void;
+  transferHost: (target: string) => void;
+  /** Set when the host threw you out, so the screen can say so. */
+  kickedOut: boolean;
+  /** Set while the "you are out" screen is up; cleared by its own button. */
+  gone: boolean;
+  dismissGone: () => void;
   proposeRestart: () => void;
   voteRestart: (approve: boolean) => void;
   clearError: () => void;
@@ -183,6 +194,24 @@ export const useGame = create<GameStore>((set, get) => {
       state.chat.some((line) => line.id === message.id) ? {} : { chat: [...state.chat, message] },
     );
   });
+  socket.on('room:kicked', () => {
+    const code = useGame.getState().room?.code;
+    forgetLastRoom();
+    if (code !== undefined) forgetToken(code);
+    useGame.setState({
+      kickedOut: true,
+      gone: true,
+      room: undefined,
+      view: undefined,
+      playerId: undefined,
+      events: [],
+      chat: [],
+      chatSeen: 0,
+      effects: [],
+      error: undefined,
+      ...(code === undefined ? {} : { leftRoom: code }),
+    });
+  });
   socket.on('chat:history', (messages: ChatMessage[]) => {
     // Arriving in a room is not the same as missing what was said before it.
     set({ chat: messages, chatSeen: messages.length });
@@ -215,6 +244,11 @@ export const useGame = create<GameStore>((set, get) => {
     view: undefined,
     error: undefined,
     leftRoom: undefined,
+    kickedOut: false,
+    gone: false,
+    dismissGone: () => {
+      set({ gone: false, kickedOut: false });
+    },
     events: [],
     chat: [],
     chatSeen: 0,
@@ -226,12 +260,28 @@ export const useGame = create<GameStore>((set, get) => {
       writeName(name);
       // A different room is a different conversation; the server sends the
       // history for this one right after the session.
-      set({ error: undefined, events: [], chat: [], chatSeen: 0, leftRoom: undefined });
+      set({
+        error: undefined,
+        events: [],
+        chat: [],
+        chatSeen: 0,
+        leftRoom: undefined,
+        kickedOut: false,
+        gone: false,
+      });
       socket.emit('room:create', { name });
     },
     joinRoom: (code, name) => {
       writeName(name);
-      set({ error: undefined, events: [], chat: [], chatSeen: 0, leftRoom: undefined });
+      set({
+        error: undefined,
+        events: [],
+        chat: [],
+        chatSeen: 0,
+        leftRoom: undefined,
+        kickedOut: false,
+        gone: false,
+      });
       const token = readToken(code);
       socket.emit('room:join', { code: code.toUpperCase(), name, ...(token ? { token } : {}) });
     },
@@ -294,6 +344,32 @@ export const useGame = create<GameStore>((set, get) => {
         error: undefined,
         ...(code === undefined ? {} : { leftRoom: code }),
       });
+    },
+    leaveForGood: () => {
+      const code = get().room?.code;
+      socket.emit('room:leaveForGood');
+      forgetLastRoom();
+      set({ gone: true, kickedOut: false });
+      // The token is spent on the server too; dropping it here just stops the
+      // browser from trying a door it knows is shut.
+      if (code !== undefined) forgetToken(code);
+      set({
+        room: undefined,
+        view: undefined,
+        playerId: undefined,
+        events: [],
+        chat: [],
+        chatSeen: 0,
+        effects: [],
+        error: undefined,
+        ...(code === undefined ? {} : { leftRoom: code }),
+      });
+    },
+    kick: (target) => {
+      socket.emit('room:kick', { target });
+    },
+    transferHost: (target) => {
+      socket.emit('room:transferHost', { target });
     },
     rematch: () => {
       set({ events: [], error: undefined });

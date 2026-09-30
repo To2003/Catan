@@ -82,7 +82,9 @@ export type ErrorCode =
   /** Confirming with somebody who has not accepted. */
   | 'NOT_ACCEPTED'
   /** Countering a counteroffer: negotiation is one level deep (SPEC.md §12.6). */
-  | 'COUNTER_NOT_ALLOWED';
+  | 'COUNTER_NOT_ALLOWED'
+  /** Walking out of a game you already walked out of. */
+  | 'ALREADY_LEFT';
 
 /**
  * Recursively readonly. The engine hands state out as `DeepReadonly<GameState>`
@@ -191,6 +193,15 @@ export interface Player {
   knightsPlayed: number;
   stock: { roads: number; settlements: number; cities: number };
   connected: boolean;
+  /**
+   * Gone for good, as opposed to merely away.
+   *
+   * `connected` is presence and is not part of the history; this is. Somebody
+   * walking out changes the course of the game — their turns get played for
+   * them, offers stop including them — so it arrives as an action and a
+   * replay reproduces it. Their pieces and cards stay on the board.
+   */
+  hasLeft: boolean;
 }
 
 export interface Building {
@@ -336,7 +347,15 @@ export type Action =
     }
   | { readonly type: 'confirmTrade'; readonly offerId: string; readonly withPlayer: PlayerId }
   | { readonly type: 'cancelOffer'; readonly offerId: string }
-  | { readonly type: 'endTurn' };
+  | { readonly type: 'endTurn' }
+  /**
+   * Leaving the game for good (SPEC.md §7.1).
+   *
+   * An action rather than a flag on the side, because it changes what the
+   * game does next: the server plays this player's turns from here on, and
+   * trade offers stop reaching them. A replay has to see it.
+   */
+  | { readonly type: 'leaveGame' };
 
 export type ActionType = Action['type'];
 

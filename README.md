@@ -6,6 +6,17 @@ detrás del botón "Cómo se juega".
 
 La fuente de verdad del proyecto es [SPEC.md](./SPEC.md); el avance se registra en [PROGRESS.md](./PROGRESS.md).
 
+## Una limitación conocida de expulsar
+
+No hay cuentas: la identidad de un jugador es un token que vive en su navegador. Cuando el host
+expulsa a alguien, ese token queda bloqueado para la sala, así que **no puede reconectarse**. Pero
+si conoce el código y la partida **todavía no arrancó**, puede entrar de nuevo como si fuera otra
+persona, con otro nombre. Con la partida empezada no puede: la puerta sólo se abre con un token
+válido (`GAME_IN_PROGRESS`).
+
+Si eso llega a molestar, la salida es cambiar el código de la sala, no endurecer el bloqueo: sin
+cuentas, cualquier cosa que se bloquee se esquiva abriendo una ventana de incógnito.
+
 ## Requisitos
 
 - Node >= 22 (ver `.nvmrc`: 24)

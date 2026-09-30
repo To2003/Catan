@@ -149,6 +149,8 @@ export const actionMessageSchema = z
   .strict();
 export const chatSchema = z.object({ text: z.string().min(1).max(MAX_CHAT) }).strict();
 export const voteSchema = z.object({ approve: z.boolean() }).strict();
+/** Any host action aimed at somebody else. The id is public; the schema only checks its shape. */
+export const targetSchema = z.object({ target: z.string().min(1).max(64) }).strict();
 export const boardModeSchema = z
   .object({ mode: z.enum(['random', 'classic', 'balanced']) })
   .strict();

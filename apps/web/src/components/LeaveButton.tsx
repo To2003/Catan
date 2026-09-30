@@ -24,7 +24,7 @@ const WORDING = {
   game: {
     button: 'Salir',
     title: '¿Salir de la partida?',
-    body: 'La partida sigue sin vos y tu lugar te queda guardado: volvés entrando con el mismo código desde este navegador. Si tardás, el anfitrión puede forzarte el turno.',
+    body: '',
     confirm: 'Sí, salir',
   },
   over: {
@@ -45,6 +45,7 @@ const WORDING = {
  */
 export function LeaveButton({ from, className = '' }: LeaveButtonProps) {
   const leaveRoom = useGame((state) => state.leaveRoom);
+  const leaveForGood = useGame((state) => state.leaveForGood);
   const [asking, setAsking] = useState(false);
   const words = WORDING[from];
 
@@ -89,30 +90,86 @@ export function LeaveButton({ from, className = '' }: LeaveButtonProps) {
             className="w-full max-w-sm rounded-panel bg-chapa p-4 ring-1 ring-chapa-alta"
           >
             <h2 className="font-display text-lg text-guanaco">{words.title}</h2>
-            <p className="mt-1.5 text-[13px] leading-relaxed text-guanaco-apagado">{words.body}</p>
 
-            <div className="mt-4 flex gap-2">
-              <button
-                type="button"
-                autoFocus
-                onClick={() => {
-                  setAsking(false);
-                }}
-                className="flex-1 rounded-panel bg-chapa-alta px-3 py-2 text-[14px] font-semibold text-guanaco hover:bg-chapa"
-              >
-                Me quedo
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  // The seat only stops being yours where it actually went.
-                  leaveRoom({ forget: from === 'lobby' });
-                }}
-                className="flex-1 rounded-panel bg-lenga px-3 py-2 text-[14px] font-semibold text-guanaco hover:bg-lenga/85"
-              >
-                {words.confirm}
-              </button>
-            </div>
+            {from === 'game' ? (
+              // Mid-game there are two different things somebody might mean,
+              // and one of them cannot be undone. Both get their own button
+              // with its own sentence, rather than one button and a warning
+              // nobody reads.
+              <div className="mt-3 flex flex-col gap-2">
+                <button
+                  type="button"
+                  autoFocus
+                  onClick={() => {
+                    leaveRoom({ forget: false });
+                  }}
+                  className="rounded-panel bg-chapa-alta p-3 text-left hover:bg-chapa-alta/70"
+                >
+                  <span className="block text-[14px] font-semibold text-guanaco">
+                    Me voy un rato
+                  </span>
+                  <span className="mt-0.5 block text-[13px] text-guanaco-apagado">
+                    Te guardamos el lugar. Volvés con el mismo código desde este navegador, y
+                    mientras tanto el anfitrión puede forzarte el turno.
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    leaveForGood();
+                  }}
+                  className="rounded-panel bg-lenga/20 p-3 text-left ring-1 ring-lenga/50 hover:bg-lenga/30"
+                >
+                  <span className="block text-[14px] font-semibold text-lenga">
+                    Abandonar para siempre
+                  </span>
+                  <span className="mt-0.5 block text-[13px] text-guanaco-apagado">
+                    <strong className="text-guanaco">Esto no se puede deshacer.</strong> Perdés tu
+                    lugar y no podés volver a entrar. Tus piezas y cartas quedan en el tablero y la
+                    mesa juega tus turnos sola.
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAsking(false);
+                  }}
+                  className="mt-1 rounded-panel bg-chapa px-3 py-2 text-[14px] font-semibold text-guanaco hover:bg-chapa-alta"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-guanaco-apagado">
+                  {words.body}
+                </p>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    type="button"
+                    autoFocus
+                    onClick={() => {
+                      setAsking(false);
+                    }}
+                    className="flex-1 rounded-panel bg-chapa-alta px-3 py-2 text-[14px] font-semibold text-guanaco hover:bg-chapa"
+                  >
+                    Me quedo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // The seat only stops being yours where it actually went.
+                      leaveRoom({ forget: from === 'lobby' });
+                    }}
+                    className="flex-1 rounded-panel bg-lenga px-3 py-2 text-[14px] font-semibold text-guanaco hover:bg-lenga/85"
+                  >
+                    {words.confirm}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       ) : null}

@@ -1,6 +1,7 @@
 import { BoardScreen } from './screens/BoardScreen.js';
 import { GameOverScreen } from './screens/GameOverScreen.js';
 import { GameScreen } from './screens/GameScreen.js';
+import { GoneScreen } from './screens/GoneScreen.js';
 import { HomeScreen } from './screens/HomeScreen.js';
 import { HotSeatScreen } from './screens/HotSeatScreen.js';
 import { LobbyScreen } from './screens/LobbyScreen.js';
@@ -26,17 +27,21 @@ export function App() {
   const connected = useGame((state) => state.connected);
   const resume = useGame((state) => state.resume);
   const leftRoom = useGame((state) => state.leftRoom);
+  const gone = useGame((state) => state.gone);
 
   // Once the socket is up, try to walk back into the last room — unless you
   // just walked out of one, which looks identical from here and is the
   // opposite of what you asked for.
   useEffect(() => {
-    if (connected && !room && !leftRoom && !hotSeat && !boardOnly) resume();
-  }, [connected, room, leftRoom, resume]);
+    if (connected && !room && !leftRoom && !gone && !hotSeat && !boardOnly) resume();
+  }, [connected, room, leftRoom, gone, resume]);
 
   if (hotSeat) return <HotSeatScreen />;
   if (boardOnly) return <BoardScreen />;
 
+  // A door that closed gets its own screen: dropping somebody back at the
+  // front door with no explanation looks like a crash.
+  if (gone) return <GoneScreen />;
   if (!room) return <HomeScreen />;
   if (view?.phase.kind === 'gameOver') return <GameOverScreen />;
   if (!room.started || !view) return <LobbyScreen />;

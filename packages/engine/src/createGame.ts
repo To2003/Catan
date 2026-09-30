@@ -64,6 +64,7 @@ const seatToPlayer = (seat: PlayerSeat): Player => ({
   knightsPlayed: 0,
   stock: { ...PIECE_STOCK },
   connected: true,
+  hasLeft: false,
 });
 
 /** Seat problems are programming errors, not illegal moves, so they throw instead of returning a Result. */

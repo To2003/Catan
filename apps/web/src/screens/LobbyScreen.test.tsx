@@ -24,6 +24,7 @@ const seat = (
   ...(extra.color === undefined ? {} : { color: extra.color }),
   ready: extra.ready ?? false,
   connected: extra.connected ?? true,
+  state: (extra.connected ?? true) ? ('active' as const) : ('disconnected' as const),
 });
 
 const seatThree = () => [

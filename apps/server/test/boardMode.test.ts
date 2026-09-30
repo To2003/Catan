@@ -101,7 +101,7 @@ describe('the host picks how the board is laid out', () => {
   });
 });
 
-describe('a database written before board modes existed', () => {
+describe('a database written before seats had an arrival order', () => {
   let folder: string;
   let db: string;
 

@@ -20,6 +20,7 @@ import {
 } from './rules/playerTrade.js';
 import { maritimeTrade } from './rules/trade.js';
 import { endTurn } from './rules/turn.js';
+import { leaveGame } from './rules/leave.js';
 import { checkVictory } from './rules/victory.js';
 import { placeSetupRoad, placeSetupSettlement } from './rules/setup.js';
 import type { Action, ErrorCode, GameState, PlayerId, ReadonlyGameState } from './types.js';
@@ -142,6 +143,10 @@ export const applyAction = (
 
     case 'cancelOffer':
       cancelOffer(draft, action.offerId, events);
+      break;
+
+    case 'leaveGame':
+      leaveGame(draft, playerId, events);
       break;
 
     case 'endTurn':

@@ -172,6 +172,8 @@ export type GameEvent =
   /* Turn flow */
   | { readonly type: 'PhaseChanged'; readonly phase: Phase }
   | { readonly type: 'TurnEnded'; readonly player: PlayerId; readonly next: PlayerId }
+  /** Somebody walked out of the game for good; their pieces stay (SPEC.md §7.1). */
+  | { readonly type: 'PlayerLeft'; readonly player: PlayerId }
   | {
       readonly type: 'GameWon';
       readonly player: PlayerId;

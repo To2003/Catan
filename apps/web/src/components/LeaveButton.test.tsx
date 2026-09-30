@@ -5,10 +5,12 @@ import { LeaveButton } from './LeaveButton.js';
 import { useGame } from '../store/gameStore.js';
 
 const leaveRoom = vi.fn();
+const leaveForGood = vi.fn();
 
 beforeEach(() => {
   leaveRoom.mockClear();
-  useGame.setState({ leaveRoom });
+  leaveForGood.mockClear();
+  useGame.setState({ leaveRoom, leaveForGood });
 });
 
 describe('the way out', () => {
@@ -50,15 +52,40 @@ describe('the way out', () => {
     expect(leaveRoom).toHaveBeenCalledWith({ forget: true });
   });
 
-  it('keeps the seat when you step away from a game', async () => {
+  it('offers the two different things leaving a game can mean', async () => {
     const user = userEvent.setup();
     render(<LeaveButton from="game" />);
 
     await user.click(screen.getByRole('button', { name: 'Salir' }));
-    // And it says so, because the two are not the same thing.
-    expect(screen.getByText(/tu lugar te queda guardado/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /me voy un rato/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /abandonar para siempre/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeInTheDocument();
+  });
 
-    await user.click(screen.getByRole('button', { name: 'Sí, salir' }));
+  it('keeps the seat when you are only stepping away', async () => {
+    const user = userEvent.setup();
+    render(<LeaveButton from="game" />);
+
+    await user.click(screen.getByRole('button', { name: 'Salir' }));
+    const away = screen.getByRole('button', { name: /me voy un rato/i });
+    expect(away).toHaveTextContent(/te guardamos el lugar/i);
+
+    await user.click(away);
     expect(leaveRoom).toHaveBeenCalledWith({ forget: false });
+    expect(leaveForGood).not.toHaveBeenCalled();
+  });
+
+  it('says plainly that the other one cannot be undone', async () => {
+    const user = userEvent.setup();
+    render(<LeaveButton from="game" />);
+
+    await user.click(screen.getByRole('button', { name: 'Salir' }));
+    const forever = screen.getByRole('button', { name: /abandonar para siempre/i });
+    expect(forever).toHaveTextContent(/no se puede deshacer/i);
+    expect(forever).toHaveTextContent(/no podés volver a entrar/i);
+
+    await user.click(forever);
+    expect(leaveForGood).toHaveBeenCalled();
+    expect(leaveRoom).not.toHaveBeenCalled();
   });
 });

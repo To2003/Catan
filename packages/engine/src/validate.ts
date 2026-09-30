@@ -8,6 +8,7 @@ import {
 } from './rules/playerTrade.js';
 import { hasLegalFreeRoad, playableCount } from './rules/devCards.js';
 import { canTradeMaritime } from './rules/trade.js';
+import { hasLeft } from './rules/leave.js';
 import {
   canAfford,
   edgeOf,
@@ -257,7 +258,11 @@ const validateCreateOffer = (
     const unique = new Set(action.to);
     if (unique.size !== action.to.length) return 'INVALID_TARGET';
     for (const target of action.to) {
-      if (target === playerId || !playerOf(state, target)) return 'INVALID_TARGET';
+      // Somebody who walked out cannot be traded with; offering to them would
+      // be an offer that can never be answered.
+      if (target === playerId || !playerOf(state, target) || hasLeft(state, target)) {
+        return 'INVALID_TARGET';
+      }
     }
   }
 
@@ -355,6 +360,9 @@ export const validateAction = (
   // Cancelling is about owning the offer, not about whose turn it is: a
   // player who countered may withdraw it while somebody else plays.
   if (action.type === 'cancelOffer') return validateCancelOffer(state, playerId, action.offerId);
+  // Walking out belongs to whoever is walking out, whenever they decide to,
+  // and the whole point is that it does not wait for their turn.
+  if (action.type === 'leaveGame') return hasLeft(state, playerId) ? 'ALREADY_LEFT' : null;
   if (state.currentPlayer !== playerId) return 'NOT_YOUR_TURN';
 
   switch (action.type) {

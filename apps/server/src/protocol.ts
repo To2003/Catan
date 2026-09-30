@@ -31,9 +31,25 @@ export type TransportError =
   | 'NO_VOTE'
   | 'ALREADY_VOTED'
   | 'ON_COOLDOWN'
-  | 'TOO_SOON';
+  | 'TOO_SOON'
+  /** A `target` that is not a seat in this room. */
+  | 'TARGET_NOT_FOUND'
+  /** Throwing yourself out, or handing yourself the room you already run. */
+  | 'CANNOT_TARGET_SELF'
+  /** This token is spent: thrown out, or walked out for good. */
+  | 'KICKED';
 
 export type ErrorPayload = { readonly code: ErrorCode | TransportError; readonly message: string };
+
+/**
+ * What has become of a seat.
+ *
+ * `active` and `disconnected` are the same person either side of a dropped
+ * connection; `left` and `kicked` are final. Keeping the last two apart
+ * matters on screen — "abandonó" and "lo echaron" are different stories —
+ * and nowhere else: both are gone for good.
+ */
+export type SeatState = 'active' | 'disconnected' | 'left' | 'kicked';
 
 /** A seat as everybody in the room may see it. Never carries the token. */
 export interface PublicSeat {
@@ -41,6 +57,8 @@ export interface PublicSeat {
   readonly name: string;
   readonly color?: PlayerColor;
   readonly ready: boolean;
+  /** Where this seat stands: active, disconnected, left for good or thrown out. */
+  readonly state: SeatState;
   readonly connected: boolean;
 }
 
@@ -88,6 +106,12 @@ export interface ClientToServer {
   'room:newBoard': () => void;
   /** Lobby only, host only: pick how the board is laid out. */
   'room:setBoardMode': (payload: unknown) => void;
+  /** Walk out of a game for good: the seat is spent and the token with it. */
+  'room:leaveForGood': () => void;
+  /** Host only: throw somebody out. */
+  'room:kick': (payload: unknown) => void;
+  /** Host only: hand the room to somebody else. */
+  'room:transferHost': (payload: unknown) => void;
   /** Give up your seat (in the lobby) or step away from the table (in a game). */
   'room:leave': () => void;
   'room:proposeRestart': () => void;
@@ -127,6 +151,8 @@ export interface ServerToClient {
   'session:replaced': () => void;
   /** Confirmation that you are out: the client may go back to the front door. */
   'room:left': (payload: { readonly seatKept: boolean }) => void;
+  /** The host threw you out. Nothing else will arrive after this. */
+  'room:kicked': () => void;
   'room:state': (state: RoomState) => void;
   'game:state': (view: PlayerView) => void;
   'game:events': (events: readonly GameEvent[]) => void;

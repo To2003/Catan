@@ -744,6 +744,37 @@ frena el reingreso automático en la misma sesión.
 
 ---
 
+## Gestión de sala ✅
+
+Se apoya en el botón "Salir" de 45a03cb.
+
+- **El host pasa por orden de ingreso.** Cada asiento guarda su número de llegada y no se reusa:
+  quien se va y vuelve entra al final de la fila. Hoy el orden del array coincide con el de
+  llegada, así que esto **no arregla un bug vivo**: convierte en regla algo que hasta ahora era una
+  coincidencia de cómo se agregan y se filtran los asientos. El caso donde se nota es el de volver
+  a entrar, que antes no estaba decidido.
+- **Dar host** (`room:transferHost`) y **expulsar** (`room:kick`), los dos solo para el host, nunca
+  sobre sí mismo, con confirmación y con un `targetOf` compartido para que los cuatro chequeos no
+  se separen.
+- **Abandonar para siempre** (`room:leaveForGood`): el diálogo en partida ofrece las dos cosas que
+  alguien puede querer decir, cada una con su renglón. La definitiva gasta el token.
+- Un asiento definitivo (`left` o `kicked`) no vota, no recibe ofertas, sus turnos los juega el
+  servidor **al instante** —sin los dos minutos, que existen para quien se metió en un túnel, no
+  para quien se fue— y sus piezas quedan. Con menos de dos jugadores la partida se archiva sin
+  ganador y la sala vuelve al lobby sin tocar el marcador; sin nadie, la sala se borra.
+- **Ocultar el código**: ojo en el lobby y en el chip de la barra. Preferencia local, no viaja.
+
+### Abandonar es una acción del engine, no una marca al costado
+
+La decisión de fondo de esta pasada. `connected` puede vivir fuera del historial porque **ninguna
+regla lo lee**. `hasLeft` sí lo leen las reglas de comercio: una oferta "a todos" deja de incluir a
+quien se fue. Si fuera una marca al costado, un replay repartiría ofertas que la partida original
+nunca repartió y `seed + acciones` dejaría de reconstruir la partida — que es la única promesa de
+la que cuelga todo lo demás. Así que hay una acción `leaveGame`, con su validación, su evento y
+sus tests, y el fuzz la tiene con peso 0 para que no corte las partidas que está jugando.
+
+---
+
 ## Decisiones tomadas sin consulta
 
 Pendientes de revisión. Todas se eligieron por el criterio "lo más conservador y consistente con el

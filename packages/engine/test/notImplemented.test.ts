@@ -34,6 +34,7 @@ const SAMPLES: readonly Action[] = [
   { type: 'confirmTrade', offerId: 'o1', withPlayer: 'p2' },
   { type: 'cancelOffer', offerId: 'o1' },
   { type: 'endTurn' },
+  { type: 'leaveGame' },
 ];
 
 describe('which actions still have no handler', () => {

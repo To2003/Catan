@@ -28,5 +28,6 @@ export const ERROR_TEXT: Record<ErrorCode, string> = {
   NOT_OFFER_TARGET: 'Esa oferta no es para vos',
   NOT_OFFER_OWNER: 'Esa oferta no es tuya',
   NOT_ACCEPTED: 'Ese jugador no aceptó',
+  ALREADY_LEFT: 'Ya saliste de esta partida',
   COUNTER_NOT_ALLOWED: 'No se puede contraofertar una contraoferta',
 };

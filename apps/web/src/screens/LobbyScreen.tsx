@@ -9,6 +9,7 @@ import {
 import { useGame } from '../store/gameStore.js';
 import { Chat } from '../components/Chat.js';
 import { CopyButton } from '../components/CopyButton.js';
+import { CodeText, EyeButton, useHiddenCode } from '../components/RoomCode.js';
 import { LeaveButton } from '../components/LeaveButton.js';
 import { RulesButton } from '../components/Rules.js';
 import { SegmentedControl, type Segment } from '../components/SegmentedControl.js';
@@ -65,6 +66,7 @@ export function LobbyScreen() {
 
   /** The drawer on a narrow screen, where the chat has no column of its own. */
   const [chatOpen, setChatOpen] = useState(false);
+  const { hidden, toggle } = useHiddenCode();
 
   // The lobby draws the board from the seed the server is showing everybody.
   // Generating it here is not a rule decision: it is the same pure function
@@ -144,9 +146,12 @@ export function LobbyScreen() {
           className="lobby-sala flex min-h-0 flex-col gap-3 md:overflow-y-auto"
         >
           <div className="rounded-panel bg-chapa p-4">
-            <p className="text-[13px] text-guanaco-apagado">Código de la sala</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[13px] text-guanaco-apagado">Código de la sala</p>
+              <EyeButton hidden={hidden} onToggle={toggle} />
+            </div>
             <p className="font-display mt-0.5 text-[52px] leading-none tracking-[0.12em] text-guanaco">
-              {room.code}
+              <CodeText code={room.code} hidden={hidden} />
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <CopyButton text={room.code} label="Copiar código" />
@@ -183,12 +188,14 @@ export function LobbyScreen() {
                             ready: seat.ready,
                             connected: seat.connected,
                             wins: room.wins[seat.playerId] ?? 0,
+                            state: seat.state,
                           },
                         })}
                     isHost={seat?.playerId === room.hostId}
                     isYou={seat?.playerId === playerId}
                     takenBy={takenBy}
                     onPickColor={setColor}
+                    youAreHost={isHost}
                   />
                 );
               })}

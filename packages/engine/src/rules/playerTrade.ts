@@ -72,7 +72,10 @@ export const createOffer = (
 ): void => {
   const targets =
     to === 'all'
-      ? draft.players.filter((player) => player.id !== playerId).map((player) => player.id)
+      ? // "Everybody" means everybody still in the game.
+        draft.players
+          .filter((player) => player.id !== playerId && !player.hasLeft)
+          .map((player) => player.id)
       : [...to];
 
   const offer: TradeOffer = {

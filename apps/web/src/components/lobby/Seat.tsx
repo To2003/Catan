@@ -1,5 +1,6 @@
 import type { PlayerColor } from '@tierra-austral/engine';
 import { ColorSwatch } from './ColorSwatch.js';
+import { HostMenu } from './HostMenu.js';
 
 export interface SeatPerson {
   readonly playerId: string;
@@ -9,6 +10,8 @@ export interface SeatPerson {
   readonly connected: boolean;
   /** Games won in this room. Absent or zero means no trophy. */
   readonly wins?: number;
+  /** Active, away, walked out for good, or thrown out. */
+  readonly state?: 'active' | 'disconnected' | 'left' | 'kicked';
 }
 
 interface SeatProps {
@@ -20,6 +23,9 @@ interface SeatProps {
   readonly isYou: boolean;
   readonly takenBy: Readonly<Partial<Record<PlayerColor, string>>>;
   readonly onPickColor: (color: PlayerColor) => void;
+  /** Whether *you* are the host, which is who gets the ⋯ over other people. */
+  readonly youAreHost?: boolean;
+  readonly inGame?: boolean;
 }
 
 /**
@@ -34,16 +40,18 @@ function Tag({
   tone,
 }: {
   readonly children: React.ReactNode;
-  readonly tone: 'ready' | 'waiting' | 'gone' | 'host';
+  readonly tone: 'ready' | 'waiting' | 'gone' | 'host' | 'final';
 }) {
   const skin =
     tone === 'ready'
       ? 'bg-verde/25 text-verde ring-verde/40'
       : tone === 'gone'
         ? 'bg-lenga/25 text-lenga ring-lenga/40'
-        : tone === 'host'
-          ? 'bg-glaciar/20 text-glaciar ring-glaciar/40'
-          : 'bg-chapa-alta text-guanaco-apagado ring-transparent';
+        : tone === 'final'
+          ? 'bg-noche text-guanaco-apagado ring-guanaco-apagado/40 line-through'
+          : tone === 'host'
+            ? 'bg-glaciar/20 text-glaciar ring-glaciar/40'
+            : 'bg-chapa-alta text-guanaco-apagado ring-transparent';
 
   return (
     <span className={`rounded-panel px-1.5 py-0.5 text-[11px] font-semibold ring-1 ${skin}`}>
@@ -62,7 +70,16 @@ function Tag({
  * Reusable on purpose: the restart vote and the end screen list the same
  * people with different chips.
  */
-export function Seat({ index, person, isHost, isYou, takenBy, onPickColor }: SeatProps) {
+export function Seat({
+  index,
+  person,
+  isHost,
+  isYou,
+  takenBy,
+  onPickColor,
+  youAreHost = false,
+  inGame = false,
+}: SeatProps) {
   if (!person) {
     return (
       <li className="flex items-center gap-3 rounded-panel border border-dashed border-chapa-alta px-3 py-2.5">
@@ -106,13 +123,23 @@ export function Seat({ index, person, isHost, isYou, takenBy, onPickColor }: Sea
 
       {isHost ? <Tag tone="host">host</Tag> : null}
 
-      {!person.connected ? (
+      {/* Gone for good reads differently from merely away: one comes back and
+          the other does not, and a room needs to be able to tell. */}
+      {person.state === 'left' ? (
+        <Tag tone="final">abandonó</Tag>
+      ) : person.state === 'kicked' ? (
+        <Tag tone="final">expulsado</Tag>
+      ) : !person.connected ? (
         <Tag tone="gone">— desconectado</Tag>
       ) : person.ready ? (
         <Tag tone="ready">✓ listo</Tag>
       ) : (
         <Tag tone="waiting">esperando</Tag>
       )}
+
+      {youAreHost && !isYou && person.state !== 'left' && person.state !== 'kicked' ? (
+        <HostMenu target={person.playerId} name={person.name} inGame={inGame} />
+      ) : null}
     </li>
   );
 }

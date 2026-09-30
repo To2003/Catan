@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import type { PlayerId, PlayerView } from '@tierra-austral/engine';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
+import { HostMenu } from './lobby/HostMenu.js';
 
 interface PlayerListProps {
   readonly view: PlayerView;
   readonly connected: (playerId: PlayerId) => boolean;
+  /** Whether you are the host, which is who gets the ⋯ over the others. */
+  readonly youAreHost?: boolean;
   /** Draw this player's longest route on the board while the pointer is on it. */
   readonly onHoverRoute: (playerId: PlayerId | undefined) => void;
   /** What each player just gained, to float over their row for a moment. */
@@ -105,7 +108,13 @@ function Stat({
  * two differ often enough to be confusing, so hovering draws the route on the
  * board and, when they differ, the tooltip says why.
  */
-export function PlayerList({ view, connected, onHoverRoute, gains }: PlayerListProps) {
+export function PlayerList({
+  view,
+  connected,
+  onHoverRoute,
+  gains,
+  youAreHost = false,
+}: PlayerListProps) {
   const [legendRead, setLegendRead] = useState(legendWasRead);
 
   const roadTooltip = (playerId: PlayerId, roads: number, route: number): string => {
@@ -161,7 +170,11 @@ export function PlayerList({ view, connected, onHoverRoute, gains }: PlayerListP
                     {player.name}
                   </span>
                   {isMe ? <span className="text-[13px] text-guanaco-apagado">vos</span> : null}
-                  {!connected(id) ? (
+                  {/* Walking out is final and being away is not; the row has
+                      to tell them apart or the table waits for nothing. */}
+                  {player.hasLeft ? (
+                    <span className="text-[13px] text-guanaco-apagado line-through">abandonó</span>
+                  ) : !connected(id) ? (
                     <span className="text-[13px] text-lenga">desconectado</span>
                   ) : null}
                 </span>
@@ -204,6 +217,10 @@ export function PlayerList({ view, connected, onHoverRoute, gains }: PlayerListP
                 </span>
                 <span className="text-[13px] text-guanaco-apagado">PV</span>
               </span>
+
+              {youAreHost && !isMe && !player.hasLeft ? (
+                <HostMenu target={id} name={player.name} inGame />
+              ) : null}
             </li>
           );
         })}

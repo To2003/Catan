@@ -218,6 +218,8 @@ export const eventLine = (event: GameEvent, { nameOf, hexLabel }: LogContext): L
       return { icon: '⚙', text: `Fase: ${event.phase.kind}`, internal: true };
     case 'TurnEnded':
       return { icon: '⏭', text: `${nameOf(event.player)} terminó su turno`, internal: true };
+    case 'PlayerLeft':
+      return { icon: '🚪', text: `${nameOf(event.player)} abandonó la partida` };
     case 'GameWon':
       return {
         icon: '🏆',

@@ -26,6 +26,7 @@ import { PlayerList } from '../components/PlayerList.js';
 import { RobberHint } from '../components/RobberHint.js';
 import { LeaveButton } from '../components/LeaveButton.js';
 import { RulesButton } from '../components/Rules.js';
+import { CodeText, EyeButton, useHiddenCode } from '../components/RoomCode.js';
 import { DiceRoll } from '../components/DiceRoll.js';
 import { isMuted, setMuted, sounds } from '../lib/sounds.js';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
@@ -60,6 +61,7 @@ export function GameScreen() {
   const setAnimation = useGame((state) => state.setAnimation);
   const pruneEffects = useGame((state) => state.pruneEffects);
   const [muted, setMutedState] = useState(isMuted);
+  const hiddenCode = useHiddenCode();
   // The engine's own bookkeeping in the log, behind the flag that already
   // exists for board ids.
   const debugLog = readDebugFromUrl();
@@ -300,8 +302,9 @@ export function GameScreen() {
     >
       <header className="flex flex-wrap items-center gap-2.5 border-b border-chapa px-3 py-1.5">
         <h1 className="font-display text-lg tracking-tight text-guanaco">Tierra Austral</h1>
-        <span className="font-display rounded-panel bg-chapa px-2 py-0.5 text-[13px] tracking-[0.2em]">
-          {room?.code}
+        <span className="font-display flex items-center gap-1 rounded-panel bg-chapa px-2 py-0.5 text-[13px] tracking-[0.2em]">
+          <CodeText code={room?.code ?? ''} hidden={hiddenCode.hidden} />
+          <EyeButton hidden={hiddenCode.hidden} onToggle={hiddenCode.toggle} className="-mr-1" />
         </span>
         <DiceRoll dice={view.lastRoll} roll={rolls} />
         <span
@@ -556,6 +559,7 @@ export function GameScreen() {
           <section>
             <h2 className="mb-1 text-[13px] font-semibold text-guanaco">Jugadores</h2>
             <PlayerList
+              youAreHost={room?.hostId === view.you}
               view={view}
               connected={(id) =>
                 room?.seats.find((seat) => seat.playerId === id)?.connected ?? true

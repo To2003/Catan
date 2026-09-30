@@ -16,3 +16,4 @@ export * from './rules/longestRoad.js';
 export * from './view.js';
 export * from './presence.js';
 export * from './rules/playerTrade.js';
+export * from './rules/leave.js';

@@ -41,6 +41,8 @@ export interface PublicPlayer {
   readonly knightsPlayed: number;
   readonly stock: { readonly roads: number; readonly settlements: number; readonly cities: number };
   readonly connected: boolean;
+  /** Walked out for good: their pieces stay, but they will not play again. */
+  readonly hasLeft: boolean;
   /** Buildings and bonuses only: victory cards stay hidden (SPEC.md §4.10). */
   readonly publicPoints: number;
   /** Roads on the board. Not the same as the route below, and that is the point. */
@@ -121,6 +123,7 @@ const toPublic = (state: ReadonlyGameState, playerId: PlayerId): PublicPlayer =>
     knightsPlayed: player.knightsPlayed,
     stock: { ...player.stock },
     connected: player.connected,
+    hasLeft: player.hasLeft,
     publicPoints: publicVictoryPoints(state, player.id),
     roadCount: Object.values(state.roads).filter((owner) => owner === player.id).length,
     routeLength: route.length,

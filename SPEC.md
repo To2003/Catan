@@ -436,6 +436,9 @@ Se hace un DFS sobre las aristas del jugador, arrancando desde cada vértice ext
 | `room:forceTurn`    | — (solo el host, pasados 2 minutos)           |
 | `room:setBoardMode` | `{ mode }` — solo el host, solo en el lobby   |
 | `room:leave`        | — (dejar la silla, o irse de la mesa)         |
+| `room:leaveForGood` | — abandono definitivo, sólo en partida        |
+| `room:kick`         | `{ target }` — solo el host, nunca a sí mismo |
+| `room:transferHost` | `{ target }` — solo el host                   |
 
 **Servidor → cliente**
 
@@ -448,8 +451,15 @@ Se hace un DFS sobre las aristas del jugador, arrancando desde cada vértice ext
 | `chat:message`     | `{ id, at, kind, from?, text }`                             |
 | `chat:history`     | las últimas 200 líneas, al entrar o al volver               |
 | `room:left`        | `{ seatKept }` — confirmación de salida, a su propio socket |
+| `room:kicked`      | — el host te sacó; no llega nada más                        |
 | `session`          | `{ playerId, token, code }` — **solo a su propio socket**   |
 | `session:replaced` | — (el mismo token entró desde otra pestaña)                 |
+
+- **El host pasa por orden de ingreso, no por orden de asiento.** Cada asiento guarda el número de llegada con el que entró y no se reusa: quien se va y vuelve entra al final de la fila. Cuando el host deja la sala, el rol va al siguiente por ese orden que siga adentro, prefiriendo a alguien conectado. El host también puede pasarlo a mano con `room:transferHost`.
+
+- **Un asiento puede estar `active`, `disconnected`, `left` o `kicked`.** Los dos primeros son la misma persona a los dos lados de una conexión cortada; los otros dos son definitivos y le gastan el token, que queda bloqueado para esa sala. Un asiento definitivo no vota reinicios, no recibe ofertas, sus turnos los juega el servidor al instante (sin los 2 minutos) y sus piezas se quedan en el tablero. Si quedan menos de dos jugadores, la partida se archiva sin ganador y la sala vuelve al lobby sin tocar el marcador; si no queda nadie, la sala se borra.
+
+- **Abandonar es una acción del engine (`leaveGame`), no una marca al costado.** La presencia (`connected`) puede vivir fuera del historial porque ninguna regla la lee; ésta sí la leen las reglas de comercio — una oferta "a todos" deja de incluir a quien se fue —, así que un replay que no la viera repartiría ofertas que la partida original nunca repartió.
 
 - **Salir quiere decir dos cosas.** En el lobby la silla se libera: el color vuelve a estar disponible, el host pasa a otro si el que se fue era el host, y si era el último la sala se borra entera. Con la partida empezada la silla **no** se puede liberar —los jugadores quedan fijos en el estado y una partida es `seed` + acciones sobre esa lista—, así que salir es irse de la mesa: el asiento queda desconectado y el token del navegador sigue alcanzando para volver. El servidor responde `room:left` con `seatKept` para que el cliente sepa cuál de las dos pasó.
 

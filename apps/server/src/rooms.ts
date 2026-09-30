@@ -10,7 +10,7 @@ import {
   type BoardMode,
   type ReadonlyGameState,
 } from '@tierra-austral/engine';
-import type { ChatMessage, PublicSeat, RoomState } from './protocol.js';
+import type { ChatMessage, PublicSeat, RoomState, SeatState } from './protocol.js';
 import { memoryStore, type Store } from './persistence.js';
 
 /**
@@ -38,7 +38,24 @@ export interface Seat {
   readonly token: string;
   /** When this player became both disconnected and in the way (SPEC.md §7.1). */
   blockingSince?: number;
+  /**
+   * Which number arrival this was, counting from 1 and never reused.
+   *
+   * The host passes down this order, not down the seat list. They are
+   * different things: somebody leaves, the list closes up, and the seat that
+   * is now second was never the second to arrive.
+   */
+  readonly joined: number;
+  /** Set only when it is final. Absent means the seat is still somebody's. */
+  gone?: 'left' | 'kicked';
 }
+
+export const seatState = (seat: Seat): SeatState =>
+  seat.gone ?? (seat.connected ? 'active' : 'disconnected');
+
+/** Seats that are still somebody's, oldest arrival first. */
+export const presentSeats = (room: Room): Seat[] =>
+  room.seats.filter((seat) => seat.gone === undefined).sort((a, b) => a.joined - b.joined);
 
 /** A vote to start over, while a game is in progress (SPEC.md §7.1). */
 export interface RestartVote {
@@ -81,6 +98,17 @@ export interface Room {
   restartVote?: RestartVote;
   /** When each player may propose a restart again, after one was turned down. */
   restartCooldown: Record<PlayerId, number>;
+  /**
+   * Tokens that may not come back: the ones the host threw out, and the ones
+   * whose owners walked out for good.
+   *
+   * Kept as tokens rather than as player ids because a token is what a
+   * reconnection presents. It is a short list — at most four — and it goes
+   * away with the room.
+   */
+  blockedTokens: string[];
+  /** The next arrival number to hand out. Never goes down. */
+  nextJoined: number;
   /**
    * The conversation. It belongs to the room, so a start, a restart, a
    * rematch and a reconnection all leave it alone; only the room's own 24h
@@ -141,12 +169,15 @@ export const persistRoom = (room: Room): void => {
     previewSeed: room.previewSeed,
     boardMode: room.boardMode,
     wins: room.wins,
+    blockedTokens: room.blockedTokens,
     seats: room.seats.map((seat) => ({
       playerId: seat.playerId,
       name: seat.name,
       ...(seat.color === undefined ? {} : { color: seat.color }),
       ready: seat.ready,
       token: seat.token,
+      joined: seat.joined,
+      ...(seat.gone === undefined ? {} : { gone: seat.gone }),
     })),
   });
 };
@@ -182,7 +213,10 @@ export const restoreRooms = (): { restored: number; failed: string[] } => {
       restartCooldown: {},
       chat: [...stored.chat],
       nextChatId: (stored.chat[stored.chat.length - 1]?.id ?? 0) + 1,
-      seats: stored.seats.map((seat) => ({
+      blockedTokens: [...stored.blockedTokens],
+      nextJoined:
+        stored.seats.reduce((top, seat, index) => Math.max(top, seat.joined ?? index + 1), 0) + 1,
+      seats: stored.seats.map((seat, index) => ({
         playerId: seat.playerId,
         name: seat.name,
         ...(seat.color === undefined ? {} : { color: seat.color }),
@@ -191,6 +225,11 @@ export const restoreRooms = (): { restored: number; failed: string[] } => {
         // tokens.
         connected: false,
         token: seat.token,
+        // A room saved before arrival order existed: the order it was stored
+        // in is the best evidence there is, and it is the right one for every
+        // room nobody had left yet.
+        joined: seat.joined ?? index + 1,
+        ...(seat.gone === undefined ? {} : { gone: seat.gone }),
       })),
       hostId: stored.hostId,
       started: stored.started,
@@ -266,7 +305,7 @@ const newCode = (): string => {
 
 export const createRoom = (hostName: string): { room: Room; seat: Seat } => {
   const code = newCode();
-  const seat = newSeat(hostName);
+  const seat = newSeat(hostName, 1);
   const room: Room = {
     code,
     seats: [seat],
@@ -282,18 +321,30 @@ export const createRoom = (hostName: string): { room: Room; seat: Seat } => {
     restartCooldown: {},
     chat: [],
     nextChatId: 1,
+    blockedTokens: [],
+    nextJoined: 2,
   };
   rooms.set(code, room);
   return { room, seat };
 };
 
-export const newSeat = (name: string): Seat => ({
+export const newSeat = (name: string, joined: number): Seat => ({
   playerId: randomUUID(),
   name,
   ready: false,
   connected: true,
   token: randomUUID(),
+  joined,
 });
+
+/** Seats somebody, handing out the next arrival number. */
+export const seatSomebody = (room: Room, name: string): Seat => {
+  const seat = newSeat(name, room.nextJoined);
+  room.nextJoined += 1;
+  room.seats.push(seat);
+  room.lastActivity = Date.now();
+  return seat;
+};
 
 export const getRoom = (code: string): Room | undefined => rooms.get(code);
 
@@ -308,12 +359,12 @@ export const seatOf = (room: Room, playerId: PlayerId): Seat | undefined =>
 export const seatByToken = (room: Room, token: string): Seat | undefined =>
   room.seats.find((seat) => seat.token === token);
 
-export const roomIsFull = (room: Room): boolean => room.seats.length >= MAX_PLAYERS;
+export const roomIsFull = (room: Room): boolean => presentSeats(room).length >= MAX_PLAYERS;
 
 export const canStart = (room: Room): boolean =>
   !room.started &&
-  room.seats.length >= MIN_PLAYERS &&
-  room.seats.every((seat) => seat.ready && seat.color !== undefined);
+  presentSeats(room).length >= MIN_PLAYERS &&
+  presentSeats(room).every((seat) => seat.ready && seat.color !== undefined);
 
 /** A fresh board for the lobby to look at. Only the host may ask for one. */
 export const rerollPreview = (room: Room): void => {
@@ -331,7 +382,7 @@ export const startGame = (room: Room): ReadonlyGameState => {
   const seed = room.previewSeed;
   const state = createGame(
     seed,
-    room.seats.map((seat) => ({
+    presentSeats(room).map((seat) => ({
       id: seat.playerId,
       name: seat.name,
       // Colours are required to start, so this cast only covers the impossible.
@@ -343,6 +394,35 @@ export const startGame = (room: Room): ReadonlyGameState => {
   room.started = true;
   room.state = state;
   return state;
+};
+
+/**
+ * Ends the running game without a winner and puts the room back in the lobby.
+ *
+ * Used when there is nobody left to play against. The game is archived like
+ * any other — it happened, and its actions replay — but with no winner, so
+ * the room's scoreboard does not move.
+ */
+export const abandonGame = (room: Room): void => {
+  if (room.seed !== undefined && room.actions.length > 0) {
+    const archived = { seed: room.seed, actions: [...room.actions], endedAt: Date.now() };
+    room.games.push(archived);
+    store.archiveGame(room.code, room.games.length - 1, archived);
+  }
+
+  room.actions.length = 0;
+  room.started = false;
+  delete room.state;
+  delete room.seed;
+  delete room.restartVote;
+  room.seats = room.seats.filter((seat) => seat.gone === undefined);
+  for (const seat of room.seats) {
+    delete seat.blockingSince;
+    seat.ready = false;
+  }
+  rerollPreview(room);
+  store.clearActions(room.code);
+  persistRoom(room);
 };
 
 /**
@@ -369,6 +449,9 @@ export const restartGame = (room: Room): ReadonlyGameState => {
   room.actions.length = 0;
   room.started = false;
   delete room.restartVote;
+  // Whoever walked out or was thrown out does not come back for the next one.
+  // Their token stays blocked, so the empty chair is a real empty chair.
+  room.seats = room.seats.filter((seat) => seat.gone === undefined);
   for (const seat of room.seats) delete seat.blockingSince;
 
   rerollPreview(room);
@@ -387,12 +470,37 @@ export const recordWin = (room: Room, playerId: PlayerId): void => {
 };
 
 /** Hands the host role to the next connected seat. */
+/**
+ * Hands the room to whoever should have it.
+ *
+ * Down the order people arrived in, not down the seat list. They stop being
+ * the same thing the moment somebody leaves: the list closes up, and the seat
+ * that is now second was never the second to arrive. Among the ones still in
+ * the room, somebody connected comes before somebody who is merely away.
+ */
 export const migrateHost = (room: Room): void => {
   const host = seatOf(room, room.hostId);
-  if (host?.connected) return;
-  const next = room.seats.find((seat) => seat.connected);
+  if (host !== undefined && host.gone === undefined && host.connected) return;
+
+  const byArrival = presentSeats(room);
+  const next = byArrival.find((seat) => seat.connected) ?? byArrival[0];
   if (next) room.hostId = next.playerId;
 };
+
+/** Marks a seat as gone for good and spends its token. */
+export const retireSeat = (room: Room, playerId: PlayerId, how: 'left' | 'kicked'): void => {
+  const seat = seatOf(room, playerId);
+  if (!seat || seat.gone !== undefined) return;
+  seat.gone = how;
+  seat.connected = false;
+  seat.ready = false;
+  delete seat.blockingSince;
+  if (!room.blockedTokens.includes(seat.token)) room.blockedTokens.push(seat.token);
+  room.lastActivity = Date.now();
+};
+
+/** Whether the room has anybody left in it at all. */
+export const roomIsEmpty = (room: Room): boolean => presentSeats(room).length === 0;
 
 export const publicSeat = (seat: Seat): PublicSeat => ({
   playerId: seat.playerId,
@@ -400,6 +508,7 @@ export const publicSeat = (seat: Seat): PublicSeat => ({
   ...(seat.color === undefined ? {} : { color: seat.color }),
   ready: seat.ready,
   connected: seat.connected,
+  state: seatState(seat),
 });
 
 export const roomState = (room: Room): RoomState => {
@@ -446,11 +555,8 @@ export const removeSeat = (room: Room, playerId: PlayerId): { empty: boolean } =
   room.lastActivity = Date.now();
   if (room.seats.length === 0) return { empty: true };
 
-  // The host walking out hands the room to whoever is still in it.
-  if (room.hostId === playerId) {
-    const next = room.seats.find((seat) => seat.connected) ?? room.seats[0];
-    if (next) room.hostId = next.playerId;
-  }
+  // The host walking out hands the room to whoever arrived next.
+  if (room.hostId === playerId) migrateHost(room);
   // A vote nobody can finish, because one of the voters is gone.
   if (room.restartVote?.by === playerId) delete room.restartVote;
 

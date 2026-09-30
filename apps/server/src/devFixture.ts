@@ -151,7 +151,7 @@ export interface Fixture {
  */
 export const createFixtureRoom = (back = 1): Fixture => {
   const seats = NAMES.map((name, index) => {
-    const seat = newSeat(name);
+    const seat = newSeat(name, index + 1);
     const color = COLORS[index];
     if (color) seat.color = color;
     seat.ready = true;
@@ -185,6 +185,8 @@ export const createFixtureRoom = (back = 1): Fixture => {
     const room: Room = {
       chat: [],
       nextChatId: 1,
+      blockedTokens: [],
+      nextJoined: NAMES.length + 1,
       boardMode: 'random',
       code,
       seats,

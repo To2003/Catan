@@ -113,6 +113,9 @@ const WEIGHTS: Record<Action['type'], number> = {
   playRoadBuilding: 6,
   playYearOfPlenty: 6,
   playMonopoly: 6,
+  // Never picked: the fuzz plays games out, and a random walkout would end
+  // them early and prove nothing. Leaving has tests of its own.
+  leaveGame: 0,
 };
 
 /** Picks a move with the weights above. Falls back to uniform if every weight is 0. */

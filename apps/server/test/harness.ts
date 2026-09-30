@@ -133,9 +133,10 @@ export const startHarness = async (options: { db?: string } = {}): Promise<Harne
 export const until = async (
   check: () => boolean,
   what = 'condition',
-  // Generous, because these suites run in parallel and a round trip through a
-  // real socket is not instant when the machine is busy.
-  timeoutMs = 15_000,
+  // Generous, because the whole workspace's suites run in parallel — the
+  // browser tests included, since the lobby got its own — and a round trip
+  // through a real socket is not instant on a busy machine.
+  timeoutMs = 20_000,
 ): Promise<void> => {
   const started = Date.now();
   while (!check()) {

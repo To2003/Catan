@@ -151,9 +151,29 @@ describe('a player view keeps the secrets', () => {
           expect(other.publicPoints).toBe(publicVictoryPoints(state, other.id));
           const real = state.players.find((candidate) => candidate.id === other.id);
           expect(other.devCardCount).toBe(real?.devCards.length);
+          // Walking out is public by design: everybody has to know the table
+          // is playing this seat automatically now.
+          expect(other.hasLeft).toBe(real?.hasLeft);
         }
       }
     }
+  });
+
+  it('says who walked out, to everybody, and says nothing more about them', () => {
+    const gone = draft(runSetup(), (state) => {
+      const bruno = state.players.find((player) => player.id !== ANA.id);
+      if (bruno) {
+        bruno.hasLeft = true;
+        bruno.devCards = ['knight', 'vp', 'monopoly'];
+      }
+    });
+
+    const view = getPlayerView(gone, ANA.id);
+    const bruno = view.players.find((player) => player.id !== ANA.id);
+    expect(bruno?.hasLeft).toBe(true);
+    // Still only a count: leaving does not turn a hand face up.
+    expect(bruno).not.toHaveProperty('devCards');
+    expect(bruno?.devCardCount).toBe(3);
   });
 
   it('does not hide what you are supposed to see', () => {
