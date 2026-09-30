@@ -7,6 +7,7 @@ import {
 } from '@tierra-austral/engine';
 import { useGame } from '../store/gameStore.js';
 import { Chat } from '../components/Chat.js';
+import { RulesButton } from '../components/Rules.js';
 import { PLAYER_COLORS, PLAYER_COLOR_LABELS } from '../lib/playerColors.js';
 import { Board } from '../components/board/Board.js';
 
@@ -221,7 +222,10 @@ export function LobbyScreen() {
             ) : null}
           </div>
 
-          <p className="text-[13px] text-guanaco-apagado">{whatIsMissing}</p>
+          <div className="flex items-center gap-3">
+            <p className="text-[13px] text-guanaco-apagado">{whatIsMissing}</p>
+            <RulesButton className="ml-auto shrink-0" />
+          </div>
         </div>
 
         <div className="w-80 rounded-panel bg-chapa p-3 lg:w-96">

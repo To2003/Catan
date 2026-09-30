@@ -24,6 +24,7 @@ import { RestartVote } from '../components/RestartVote.js';
 import { EventLog } from '../components/EventLog.js';
 import { PlayerList } from '../components/PlayerList.js';
 import { RobberHint } from '../components/RobberHint.js';
+import { RulesButton } from '../components/Rules.js';
 import { DiceRoll } from '../components/DiceRoll.js';
 import { isMuted, setMuted, sounds } from '../lib/sounds.js';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
@@ -338,6 +339,7 @@ export function GameScreen() {
               ))}
             </select>
           </label>
+          <RulesButton />
           <button
             type="button"
             aria-pressed={muted}

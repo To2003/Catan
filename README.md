@@ -1,6 +1,9 @@
 # Tierra Austral
 
 Juego de mesa por turnos para 3 a 4 jugadores, online, en salas privadas con código.
+¿No sabés jugar? [REGLAS.md](./REGLAS.md) lo explica desde cero; la app muestra ese mismo archivo
+detrás del botón "Cómo se juega".
+
 La fuente de verdad del proyecto es [SPEC.md](./SPEC.md); el avance se registra en [PROGRESS.md](./PROGRESS.md).
 
 ## Requisitos

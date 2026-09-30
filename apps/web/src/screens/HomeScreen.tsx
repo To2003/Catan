@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useGame } from '../store/gameStore.js';
 import { readLastRoom } from '../lib/tokens.js';
+import { RulesButton } from '../components/Rules.js';
 
 /** Create a room or join one with a code. */
 export function HomeScreen() {
@@ -66,6 +67,8 @@ export function HomeScreen() {
           </button>
         </div>
       </div>
+
+      <RulesButton />
 
       <p className="text-xs text-stone-500">
         {connected ? 'Conectado' : 'Conectando…'} · 3 a 4 jugadores
