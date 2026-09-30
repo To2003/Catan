@@ -321,6 +321,7 @@ interface GameState {
   turnOrder: PlayerId[];
   currentPlayer: PlayerId;
   turn: number; // 0 durante la preparación, 1 en el primer turno, +1 por endTurn
+  boardMode: BoardMode; // 'random' | 'classic' | 'balanced'; sin él, seed + acciones no rearma el tablero
   phase: Phase;
   lastRoll?: [number, number];
   bank: ResourceBundle;
@@ -423,16 +424,17 @@ Se hace un DFS sobre las aristas del jugador, arrancando desde cada vértice ext
 
 **Cliente → servidor**
 
-| Evento           | Payload                                       |
-| ---------------- | --------------------------------------------- |
-| `room:create`    | `{ name }`                                    |
-| `room:join`      | `{ code, name, token? }`                      |
-| `room:setColor`  | `{ color }`                                   |
-| `room:ready`     | `{ ready: boolean }`                          |
-| `room:start`     | — (solo el host)                              |
-| `game:action`    | `{ action: Action, expectedVersion: number }` |
-| `chat:send`      | `{ text }`                                    |
-| `room:forceTurn` | — (solo el host, pasados 2 minutos)           |
+| Evento              | Payload                                       |
+| ------------------- | --------------------------------------------- |
+| `room:create`       | `{ name }`                                    |
+| `room:join`         | `{ code, name, token? }`                      |
+| `room:setColor`     | `{ color }`                                   |
+| `room:ready`        | `{ ready: boolean }`                          |
+| `room:start`        | — (solo el host)                              |
+| `game:action`       | `{ action: Action, expectedVersion: number }` |
+| `chat:send`         | `{ text }`                                    |
+| `room:forceTurn`    | — (solo el host, pasados 2 minutos)           |
+| `room:setBoardMode` | `{ mode }` — solo el host, solo en el lobby   |
 
 **Servidor → cliente**
 
@@ -627,15 +629,18 @@ Las posiciones de los puertos **no se hardcodean**: se calculan.
 
 El orden es **parte del contrato**: de él dependen el test de snapshot del tablero y la reproducción de una partida a partir de `seed` + acciones.
 
-**En `generateBoard(seed)`:**
+**En `generateBoard(seed, mode)`**, según el modo:
 
-1. **Terrenos** — un Fisher-Yates sobre la bolsa de terrenos.
-2. **Números** — un shuffle por intento, reintentando hasta que no queden dos fichas rojas adyacentes. Los terrenos **no** se remezclan entre intentos.
-3. **Tipos de puerto** — un shuffle de los 9 tipos.
+- **`'random'`** (el que corre por defecto, y sobre el que se grabó toda partida guardada):
+  1. **Terrenos** — un Fisher-Yates sobre la bolsa de terrenos.
+  2. **Números** — un shuffle por intento, reintentando hasta que no queden dos fichas rojas adyacentes. Los terrenos **no** se remezclan entre intentos.
+  3. **Tipos de puerto** — un shuffle de los 9 tipos.
+- **`'classic'`** — **no consume RNG**. El tablero sale entero de la tabla de `board/classic.ts`, así que la semilla llega intacta al orden de turnos.
+- **`'balanced'`** — repite los pasos 1 a 3 de `'random'` tantas veces como haga falta hasta que el tablero pase los cuatro controles de `board/balance.ts` (sin números iguales pegados, sin cadenas de tres terrenos iguales, reparto de pips dentro de banda, y ningún puerto 2:1 sobre un 6 u 8 de su propio recurso). Cada intento descartado consume su tirada completa, así que el estado del PRNG al terminar depende de cuántos hicieron falta. Acepta cerca de uno de cada 77; el tope es de 4000 intentos y agotarlo es un error.
 
 **En `createGame(seed, players)`**, continuando con el mismo estado del PRNG:
 
-4. **Tablero** — los pasos 1 a 3. Va primero para que el snapshot de M1 siga valiendo.
+4. **Tablero** — según el modo, como arriba. Va primero para que el snapshot de M1 siga valiendo.
 5. **Orden de turnos** — un shuffle de los asientos, en el orden en que se recibieron.
 6. **Mazo de desarrollo** — un shuffle de las 25 cartas. Se mezcla acá desde M2 aunque nadie robe hasta M5: meterlo después correría todas las tiradas de todas las semillas. **El tope del mazo es `devDeck[0]`** y se roba con un `shift`: el shuffle produce el mazo leído de arriba hacia abajo. Comprar una carta **no consume RNG**, así que las compras no corren la secuencia de dados.
 

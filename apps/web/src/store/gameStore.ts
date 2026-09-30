@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Action, GameEvent, PlayerView } from '@tierra-austral/engine';
+import type { Action, BoardMode, GameEvent, PlayerView } from '@tierra-austral/engine';
 import { socket } from '../net/socket.js';
 import {
   readLastRoom,
@@ -49,6 +49,7 @@ export interface RoomState {
   readonly started: boolean;
   readonly blockedBy?: { readonly playerId: string; readonly since: number };
   readonly previewSeed: number;
+  readonly boardMode: BoardMode;
   readonly wins: Readonly<Record<string, number>>;
   readonly gamesPlayed: number;
   readonly restartVote?: RestartVoteState;
@@ -107,6 +108,7 @@ interface GameStore {
   sendChat: (text: string) => void;
   rematch: () => void;
   newBoard: () => void;
+  setBoardMode: (mode: BoardMode) => void;
   proposeRestart: () => void;
   voteRestart: (approve: boolean) => void;
   clearError: () => void;
@@ -260,6 +262,9 @@ export const useGame = create<GameStore>((set, get) => {
     rematch: () => {
       set({ events: [], error: undefined });
       socket.emit('room:rematch');
+    },
+    setBoardMode: (mode) => {
+      socket.emit('room:setBoardMode', { mode });
     },
     newBoard: () => {
       socket.emit('room:newBoard');

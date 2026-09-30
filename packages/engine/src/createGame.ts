@@ -8,7 +8,7 @@ import {
   RESOURCES,
   emptyBundle,
 } from './constants.js';
-import { generateBoard } from './board/generate.js';
+import { generateBoard, type BoardMode } from './board/generate.js';
 import { shuffle } from './rng.js';
 import type {
   DevCard,
@@ -82,12 +82,20 @@ const validateSeats = (seats: readonly PlayerSeat[]): void => {
 /**
  * Builds the opening state: board, seats, turn order and a shuffled dev deck,
  * with the first player about to place their first settlement.
+ *
+ * The mode defaults to `'random'`: a game recorded before modes existed
+ * replays into exactly the board it was played on.
  */
-export const createGame = (seed: number, seats: readonly PlayerSeat[]): ReadonlyGameState => {
+export const createGame = (
+  seed: number,
+  seats: readonly PlayerSeat[],
+  boardMode: BoardMode = 'random',
+): ReadonlyGameState => {
   validateSeats(seats);
 
-  // 1. Board.
-  const generated = generateBoard(seed);
+  // 1. Board. `'classic'` consumes no randomness, so in that mode the seed
+  // reaches the turn order untouched.
+  const generated = generateBoard(seed, boardMode);
 
   // 2. Turn order.
   const orderDraw = shuffle(generated.rngState, seats);
@@ -101,6 +109,7 @@ export const createGame = (seed: number, seats: readonly PlayerSeat[]): Readonly
   return {
     version: 0,
     seed,
+    boardMode,
     rngState: deckDraw.state,
     board: generated.board,
     robberHex: generated.robberHex,

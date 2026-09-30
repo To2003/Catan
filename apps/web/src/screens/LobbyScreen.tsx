@@ -1,11 +1,36 @@
 import { useMemo } from 'react';
-import { MIN_PLAYERS, generateBoard, type PlayerColor } from '@tierra-austral/engine';
+import {
+  MIN_PLAYERS,
+  generateBoard,
+  type BoardMode,
+  type PlayerColor,
+} from '@tierra-austral/engine';
 import { useGame } from '../store/gameStore.js';
 import { Chat } from '../components/Chat.js';
 import { PLAYER_COLORS, PLAYER_COLOR_LABELS } from '../lib/playerColors.js';
 import { Board } from '../components/board/Board.js';
 
 const COLORS: readonly PlayerColor[] = ['celeste', 'bordo', 'verde', 'amarillo'];
+
+/** The three ways a board can come out, in the words the lobby uses. */
+const MODES: readonly { mode: BoardMode; label: string; blurb: string }[] = [
+  {
+    mode: 'random',
+    label: 'Aleatorio',
+    blurb: 'Como sale. Lo único que se respeta es que no haya dos rojos pegados.',
+  },
+  {
+    mode: 'classic',
+    label: 'Clásico',
+    blurb: 'El tablero fijo de siempre: mismos terrenos, mismos números, mismos puertos.',
+  },
+  {
+    mode: 'balanced',
+    label: 'Balanceado',
+    blurb:
+      'Al azar, pero sin números repetidos pegados, sin tres terrenos iguales en fila y con los recursos parejos.',
+  },
+];
 
 /** Colours, ready marks and the host's start button. */
 export function LobbyScreen() {
@@ -15,6 +40,7 @@ export function LobbyScreen() {
   const setReady = useGame((state) => state.setReady);
   const start = useGame((state) => state.start);
   const newBoard = useGame((state) => state.newBoard);
+  const setBoardMode = useGame((state) => state.setBoardMode);
   const error = useGame((state) => state.error);
   const chat = useGame((state) => state.chat);
   const sendChat = useGame((state) => state.sendChat);
@@ -23,9 +49,13 @@ export function LobbyScreen() {
   // Generating it here is not a rule decision: it is the same pure function
   // the engine uses, run on a number the server chose.
   const previewSeed = room?.previewSeed;
+  const boardMode = room?.boardMode;
   const preview = useMemo(
-    () => (previewSeed === undefined ? undefined : generateBoard(previewSeed)),
-    [previewSeed],
+    () =>
+      previewSeed === undefined || boardMode === undefined
+        ? undefined
+        : generateBoard(previewSeed, boardMode),
+    [previewSeed, boardMode],
   );
 
   if (!room) return null;
@@ -70,19 +100,39 @@ export function LobbyScreen() {
             <Board board={preview.board} robberHex={preview.robberHex} debug={false} />
           ) : null}
         </div>
-        {isHost ? (
-          <button
-            type="button"
-            onClick={newBoard}
-            className="mt-1 rounded-panel bg-chapa px-3 py-1 text-xs font-semibold hover:bg-chapa-alta"
-          >
-            Otro tablero
-          </button>
-        ) : (
-          <p className="mt-1 text-xs text-guanaco-apagado">
-            El host puede cambiar el tablero antes de arrancar
-          </p>
-        )}
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-1">
+          {MODES.map((option) => (
+            <button
+              key={option.mode}
+              type="button"
+              disabled={!isHost}
+              title={option.blurb}
+              onClick={() => {
+                setBoardMode(option.mode);
+              }}
+              className={`rounded-panel px-3 py-1 text-[13px] font-semibold disabled:opacity-60 ${
+                room.boardMode === option.mode
+                  ? 'bg-guanaco text-noche'
+                  : 'bg-chapa text-guanaco-apagado'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+          {isHost && room.boardMode !== 'classic' ? (
+            <button
+              type="button"
+              onClick={newBoard}
+              className="rounded-panel bg-chapa px-3 py-1 text-[13px] font-semibold hover:bg-chapa-alta"
+            >
+              Otro tablero
+            </button>
+          ) : null}
+        </div>
+        <p className="mt-1 max-w-md text-center text-[13px] text-guanaco-apagado">
+          {MODES.find((option) => option.mode === room.boardMode)?.blurb}
+          {isHost ? '' : ' · lo elige el host'}
+        </p>
       </div>
 
       {error ? <p className="rounded bg-bordo px-3 py-1.5 text-sm font-semibold">{error}</p> : null}

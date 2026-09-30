@@ -1,5 +1,6 @@
 import type { LegalMoves } from './legal.js';
 import { legalMoves } from './legal.js';
+import type { BoardMode } from './board/generate.js';
 import { longestRoadPath } from './rules/longestRoad.js';
 import { publicVictoryPoints, victoryPoints } from './rules/victory.js';
 import type {
@@ -68,6 +69,8 @@ export interface PlayerView {
   readonly you: PlayerId;
   readonly version: number;
   readonly board: BoardGraph;
+  /** How this board was laid out. Public: everybody is looking at the same one. */
+  readonly boardMode: BoardMode;
   readonly robberHex: HexId;
   readonly buildings: Readonly<Record<VertexId, { owner: PlayerId; type: 'settlement' | 'city' }>>;
   readonly roads: Readonly<Record<EdgeId, PlayerId>>;
@@ -151,6 +154,7 @@ export const getPlayerView = (state: ReadonlyGameState, playerId: PlayerId): Pla
     devCardPlayedThisTurn: state.devCardPlayedThisTurn,
     tradeOffers: state.tradeOffers,
     phase: state.phase,
+    boardMode: state.boardMode,
     currentPlayer: state.currentPlayer,
     turn: state.turn,
     round: roundOf(state.turn, state.turnOrder.length),

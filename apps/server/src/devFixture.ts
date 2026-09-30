@@ -185,6 +185,7 @@ export const createFixtureRoom = (back = 1): Fixture => {
     const room: Room = {
       chat: [],
       nextChatId: 1,
+      boardMode: 'random',
       code,
       seats,
       hostId: seats[0]?.playerId ?? '',

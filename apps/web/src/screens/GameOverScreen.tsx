@@ -1,6 +1,7 @@
 import type { PlayerId } from '@tierra-austral/engine';
 import { useGame } from '../store/gameStore.js';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
+import { BOARD_MODE_LABELS } from '../lib/boardModes.js';
 
 /**
  * How the game ended, broken down, and the chance to play another one in the
@@ -52,7 +53,7 @@ export function GameOverScreen() {
         ) : null}
         <p className="mt-1 text-[13px] text-guanaco-apagado">
           Duró {view.round} ronda{view.round === 1 ? '' : 's'} · {view.turn} turno
-          {view.turn === 1 ? '' : 's'}
+          {view.turn === 1 ? '' : 's'} · tablero {BOARD_MODE_LABELS[view.boardMode].toLowerCase()}
         </p>
       </div>
 

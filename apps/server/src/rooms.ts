@@ -7,6 +7,7 @@ import {
   type Action,
   type PlayerColor,
   type PlayerId,
+  type BoardMode,
   type ReadonlyGameState,
 } from '@tierra-austral/engine';
 import type { ChatMessage, PublicSeat, RoomState } from './protocol.js';
@@ -63,6 +64,12 @@ export interface Room {
    * what everybody looked at is what they play.
    */
   previewSeed: number;
+  /**
+   * How the board is laid out, for this room's games. Chosen by the host in
+   * the lobby and kept across a restart and a rematch, because it is the
+   * table's choice rather than one game's.
+   */
+  boardMode: BoardMode;
   /** Finished games, oldest first. A room outlives its games. */
   games: {
     seed: number;
@@ -132,6 +139,7 @@ export const persistRoom = (room: Room): void => {
     createdAt: room.createdAt,
     lastActivity: room.lastActivity,
     previewSeed: room.previewSeed,
+    boardMode: room.boardMode,
     wins: room.wins,
     seats: room.seats.map((seat) => ({
       playerId: seat.playerId,
@@ -168,6 +176,7 @@ export const restoreRooms = (): { restored: number; failed: string[] } => {
     const room: Room = {
       code: stored.code,
       previewSeed: stored.previewSeed,
+      boardMode: stored.boardMode,
       games: stored.games.map((game) => ({ ...game })),
       wins: { ...stored.wins },
       restartCooldown: {},
@@ -199,6 +208,7 @@ export const restoreRooms = (): { restored: number; failed: string[] } => {
           name: seat.name,
           color: seat.color as PlayerColor,
         })),
+        stored.boardMode,
       );
 
       let broken = false;
@@ -266,6 +276,7 @@ export const createRoom = (hostName: string): { room: Room; seat: Seat } => {
     createdAt: Date.now(),
     lastActivity: Date.now(),
     previewSeed: randomInt(0, 0xffffffff),
+    boardMode: 'random',
     games: [],
     wins: {},
     restartCooldown: {},
@@ -326,6 +337,7 @@ export const startGame = (room: Room): ReadonlyGameState => {
       // Colours are required to start, so this cast only covers the impossible.
       color: seat.color as PlayerColor,
     })),
+    room.boardMode,
   );
   room.seed = seed;
   room.started = true;
@@ -398,6 +410,7 @@ export const roomState = (room: Room): RoomState => {
     hostId: room.hostId,
     started: room.started,
     previewSeed: room.previewSeed,
+    boardMode: room.boardMode,
     wins: { ...room.wins },
     gamesPlayed: room.games.length,
     restartCooldown: { ...room.restartCooldown },

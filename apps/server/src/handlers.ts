@@ -37,6 +37,7 @@ import {
 } from './rooms.js';
 import {
   actionMessageSchema,
+  boardModeSchema,
   chatSchema,
   createRoomSchema,
   voteSchema,
@@ -481,6 +482,34 @@ export const registerHandlers = (io: GameServer): void => {
       }
 
       rerollPreview(session.room);
+      persistRoom(session.room);
+      publish(session.room);
+    });
+
+    socket.on('room:setBoardMode', (payload: unknown) => {
+      const parsed = boardModeSchema.safeParse(payload);
+      if (!parsed.success) {
+        fail(socket, 'BAD_PAYLOAD');
+        return;
+      }
+      const session = sessionOf(socket);
+      if (!session) {
+        fail(socket, 'NO_SESSION');
+        return;
+      }
+      if (session.room.hostId !== session.playerId) {
+        fail(socket, 'NOT_HOST');
+        return;
+      }
+      // Changing it mid-game would mean the saved actions no longer rebuild
+      // the board they were played on.
+      if (session.room.started) {
+        fail(socket, 'GAME_IN_PROGRESS');
+        return;
+      }
+
+      session.room.boardMode = parsed.data.mode;
+      session.room.lastActivity = Date.now();
       persistRoom(session.room);
       publish(session.room);
     });

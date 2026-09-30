@@ -149,3 +149,6 @@ export const actionMessageSchema = z
   .strict();
 export const chatSchema = z.object({ text: z.string().min(1).max(MAX_CHAT) }).strict();
 export const voteSchema = z.object({ approve: z.boolean() }).strict();
+export const boardModeSchema = z
+  .object({ mode: z.enum(['random', 'classic', 'balanced']) })
+  .strict();

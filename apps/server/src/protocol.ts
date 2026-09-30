@@ -1,4 +1,5 @@
 import type {
+  BoardMode,
   ErrorCode,
   GameEvent,
   PlayerColor,
@@ -61,6 +62,8 @@ export interface RoomState {
   readonly blockedBy?: { readonly playerId: PlayerId; readonly since: number };
   /** The board the lobby is showing; the client draws it from the seed. */
   readonly previewSeed: number;
+  /** How the lobby's board is laid out; the host picks it before starting. */
+  readonly boardMode: BoardMode;
   /** Games won per player, across every game this room has played. */
   readonly wins: Readonly<Record<PlayerId, number>>;
   readonly gamesPlayed: number;
@@ -83,6 +86,8 @@ export interface ClientToServer {
   'room:rematch': () => void;
   /** Lobby only, host only: draw a different board before starting. */
   'room:newBoard': () => void;
+  /** Lobby only, host only: pick how the board is laid out. */
+  'room:setBoardMode': (payload: unknown) => void;
   'room:proposeRestart': () => void;
   'room:voteRestart': (payload: unknown) => void;
   'game:action': (payload: unknown) => void;

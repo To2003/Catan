@@ -29,6 +29,7 @@ import { isMuted, setMuted, sounds } from '../lib/sounds.js';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
 import { RESOURCE_ICONS, TERRAIN_STYLES } from '../lib/terrainStyles.js';
 import { SPEED_LABELS, speedScale, type AnimationSpeed } from '../lib/animation.js';
+import { BOARD_MODE_LABELS } from '../lib/boardModes.js';
 import { useGame } from '../store/gameStore.js';
 import { readDebugFromUrl } from '../lib/seed.js';
 import { FORCE_TURN_HINT_MS } from '../lib/timing.js';
@@ -306,6 +307,12 @@ export function GameScreen() {
           className="font-display rounded-panel bg-chapa px-2 py-0.5 text-[13px]"
         >
           {whereWeAre}
+        </span>
+        <span
+          title="Cómo se armó este tablero"
+          className="rounded-panel bg-chapa px-2 py-0.5 text-[13px] text-guanaco-apagado"
+        >
+          {BOARD_MODE_LABELS[view.boardMode]}
         </span>
         <TurnBanner view={view} nameOf={nameOf} />
         {error ? (

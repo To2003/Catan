@@ -4,6 +4,7 @@
  */
 
 import type { RngState } from './rng.js';
+import type { BoardMode } from './board/generate.js';
 
 export type Resource = 'wood' | 'brick' | 'sheep' | 'wheat' | 'ore';
 
@@ -254,6 +255,12 @@ export interface GameState {
   /** Incremented on every applied action. The client sends it back as `expectedVersion`. */
   version: number;
   readonly seed: number;
+  /**
+   * How the board was laid out. Part of the state because `seed + actions`
+   * has to rebuild the board, and the seed alone no longer says which one.
+   * A game saved before modes existed replays as `'random'`.
+   */
+  readonly boardMode: BoardMode;
   rngState: RngState;
   readonly board: BoardGraph;
   robberHex: HexId;

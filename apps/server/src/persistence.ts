@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import type { Action, PlayerColor, PlayerId } from '@tierra-austral/engine';
+import type { Action, BoardMode, PlayerColor, PlayerId } from '@tierra-austral/engine';
 import type { ChatMessage } from './protocol.js';
 
 /**
@@ -23,15 +23,17 @@ import type { ChatMessage } from './protocol.js';
  */
 const require = createRequire(import.meta.url);
 
-interface SqliteModule {
-  new (path: string): {
-    exec(sql: string): void;
-    prepare(sql: string): {
-      run(...params: (string | number | null)[]): unknown;
-      all(...params: (string | number | null)[]): unknown[];
-    };
-    close(): void;
+interface Database {
+  exec(sql: string): void;
+  prepare(sql: string): {
+    run(...params: (string | number | null)[]): unknown;
+    all(...params: (string | number | null)[]): unknown[];
   };
+  close(): void;
+}
+
+interface SqliteModule {
+  new (path: string): Database;
 }
 
 const DatabaseSync = (require('node:sqlite') as { DatabaseSync: SqliteModule }).DatabaseSync;
@@ -63,6 +65,12 @@ export interface StoredRoom {
   readonly actions: { playerId: PlayerId; action: Action }[];
   /** The board the lobby is showing before anybody presses start. */
   readonly previewSeed: number;
+  /**
+   * How this room lays its boards out. Rows written before modes existed have
+   * no value here and come back as `'random'`, which is what they were played
+   * on.
+   */
+  readonly boardMode: BoardMode;
   /** Games already finished in this room, oldest first. */
   readonly games: StoredGame[];
   readonly wins: Readonly<Record<PlayerId, number>>;
@@ -103,6 +111,21 @@ export const memoryStore = (): Store => ({
   close: () => undefined,
 });
 
+/**
+ * Adds a column to a table that already exists, if it is not there yet.
+ *
+ * `CREATE TABLE IF NOT EXISTS` does nothing to a table that is already
+ * present, so a database written by an older build keeps its old columns and
+ * the first prepared statement mentioning a new one fails at boot — which is
+ * exactly how this was found. Every column added after the first release has
+ * to come through here.
+ */
+const addColumn = (db: Database, table: string, column: string, definition: string): void => {
+  const existing = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (existing.some((row) => row.name === column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+};
+
 export const sqliteStore = (path: string): Store => {
   const db = new DatabaseSync(path);
   db.exec('PRAGMA journal_mode = WAL');
@@ -116,7 +139,8 @@ export const sqliteStore = (path: string): Store => {
       last_activity INTEGER NOT NULL,
       seats TEXT NOT NULL,
       preview_seed INTEGER NOT NULL DEFAULT 0,
-      wins TEXT NOT NULL DEFAULT '{}'
+      wins TEXT NOT NULL DEFAULT '{}',
+      board_mode TEXT NOT NULL DEFAULT 'random'
     );
     CREATE TABLE IF NOT EXISTS archived_games (
       code TEXT NOT NULL,
@@ -145,9 +169,15 @@ export const sqliteStore = (path: string): Store => {
     );
   `);
 
+  // Columns that arrived after the first release, for databases that predate
+  // them. Each is idempotent, so this runs on every boot.
+  addColumn(db, 'rooms', 'preview_seed', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn(db, 'rooms', 'wins', "TEXT NOT NULL DEFAULT '{}'");
+  addColumn(db, 'rooms', 'board_mode', "TEXT NOT NULL DEFAULT 'random'");
+
   const upsertRoom = db.prepare(`
-    INSERT INTO rooms (code, seed, host_id, started, created_at, last_activity, seats, preview_seed, wins)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO rooms (code, seed, host_id, started, created_at, last_activity, seats, preview_seed, wins, board_mode)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(code) DO UPDATE SET
       seed = excluded.seed,
       host_id = excluded.host_id,
@@ -155,7 +185,8 @@ export const sqliteStore = (path: string): Store => {
       last_activity = excluded.last_activity,
       seats = excluded.seats,
       preview_seed = excluded.preview_seed,
-      wins = excluded.wins
+      wins = excluded.wins,
+      board_mode = excluded.board_mode
   `);
   const insertArchived = db.prepare(
     'INSERT OR REPLACE INTO archived_games (code, idx, seed, actions, winner, ended_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -189,6 +220,7 @@ export const sqliteStore = (path: string): Store => {
         JSON.stringify(room.seats),
         room.previewSeed,
         JSON.stringify(room.wins),
+        room.boardMode,
       );
     },
 
@@ -230,6 +262,7 @@ export const sqliteStore = (path: string): Store => {
         seats: string;
         preview_seed: number;
         wins: string;
+        board_mode: string | null;
       }[];
 
       return rows.map((row) => {
@@ -280,6 +313,8 @@ export const sqliteStore = (path: string): Store => {
           seats: JSON.parse(row.seats) as StoredSeat[],
           actions,
           previewSeed: row.preview_seed,
+          // A room saved before modes existed was played on the random one.
+          boardMode: (row.board_mode ?? 'random') as BoardMode,
           games,
           wins: JSON.parse(row.wins) as Record<PlayerId, number>,
           chat,
