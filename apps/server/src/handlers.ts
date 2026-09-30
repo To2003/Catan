@@ -28,7 +28,9 @@ import {
   persistAction,
   persistRoom,
   pushChat,
+  dropRoom,
   recordWin,
+  removeSeat,
   rerollPreview,
   restartGame,
   seatOf,
@@ -512,6 +514,52 @@ export const registerHandlers = (io: GameServer): void => {
       session.room.lastActivity = Date.now();
       persistRoom(session.room);
       publish(session.room);
+    });
+
+    /**
+     * Leaving, which means two different things.
+     *
+     * In the lobby the seat goes: the room has to stop counting somebody who
+     * walked out, or it sits there waiting for them to be ready forever. Once
+     * the game has started the seat cannot go — the players are baked into the
+     * state — so leaving is stepping away from the table, and the token in
+     * your browser still brings you back.
+     */
+    socket.on('room:leave', () => {
+      const session = sessionOf(socket);
+      if (!session) {
+        fail(socket, 'NO_SESSION');
+        return;
+      }
+      const { room, playerId } = session;
+      const seat = seatOf(room, playerId);
+      const name = seat?.name ?? 'Alguien';
+      const seatKept = room.started;
+
+      connections.delete(playerId);
+      void socket.leave(room.code);
+      socket.data = {};
+
+      if (seatKept) {
+        if (seat) seat.connected = false;
+        if (room.state) room.state = setConnected(room.state, playerId, false);
+        migrateHost(room);
+        say(room, { kind: 'system', text: `${name} se fue de la mesa` });
+        persistRoom(room);
+        publish(room);
+      } else {
+        const { empty } = removeSeat(room, playerId);
+        if (empty) {
+          // Nobody left to talk to, so there is nothing to keep.
+          dropRoom(room.code);
+        } else {
+          say(room, { kind: 'system', text: `${name} se fue de la sala` });
+          persistRoom(room);
+          publish(room);
+        }
+      }
+
+      socket.emit('room:left', { seatKept });
     });
 
     socket.on('room:proposeRestart', () => {

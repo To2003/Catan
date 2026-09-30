@@ -431,6 +431,32 @@ export const roomState = (room: Room): RoomState => {
   };
 };
 
+/**
+ * Takes somebody out of a room they have not started playing in.
+ *
+ * Only before the game starts. Once it has, the seats are baked into the
+ * state — a game is `seed + actions` over a fixed list of players — so
+ * leaving a game in progress means going away, not vacating the chair.
+ *
+ * Returns whether the room is now empty, which is the caller's cue to throw
+ * it away rather than leave a room nobody is in holding a code.
+ */
+export const removeSeat = (room: Room, playerId: PlayerId): { empty: boolean } => {
+  room.seats = room.seats.filter((seat) => seat.playerId !== playerId);
+  room.lastActivity = Date.now();
+  if (room.seats.length === 0) return { empty: true };
+
+  // The host walking out hands the room to whoever is still in it.
+  if (room.hostId === playerId) {
+    const next = room.seats.find((seat) => seat.connected) ?? room.seats[0];
+    if (next) room.hostId = next.playerId;
+  }
+  // A vote nobody can finish, because one of the voters is gone.
+  if (room.restartVote?.by === playerId) delete room.restartVote;
+
+  return { empty: false };
+};
+
 export const dropRoom = (code: string): void => {
   rooms.delete(code);
   store.deleteRoom(code);

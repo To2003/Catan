@@ -88,6 +88,8 @@ export interface ClientToServer {
   'room:newBoard': () => void;
   /** Lobby only, host only: pick how the board is laid out. */
   'room:setBoardMode': (payload: unknown) => void;
+  /** Give up your seat (in the lobby) or step away from the table (in a game). */
+  'room:leave': () => void;
   'room:proposeRestart': () => void;
   'room:voteRestart': (payload: unknown) => void;
   'game:action': (payload: unknown) => void;
@@ -123,6 +125,8 @@ export interface SocketData {
 export interface ServerToClient {
   session: (payload: { playerId: PlayerId; token: string; code: string }) => void;
   'session:replaced': () => void;
+  /** Confirmation that you are out: the client may go back to the front door. */
+  'room:left': (payload: { readonly seatKept: boolean }) => void;
   'room:state': (state: RoomState) => void;
   'game:state': (view: PlayerView) => void;
   'game:events': (events: readonly GameEvent[]) => void;

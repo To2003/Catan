@@ -718,6 +718,32 @@ a la primera release ahora pasan por un `ALTER TABLE` idempotente, con un test q
 el esquema viejo. **Si la base de Render es anterior a esas columnas, este arreglo es el que la
 deja arrancar.**
 
+---
+
+## Botón de salida ✅
+
+Antes no había forma de irse: cerrabas la pestaña y tu silla quedaba ocupada por un fantasma hasta
+la limpieza de 24 h, contando para el mínimo y trabando el "falta que esté listo".
+
+`room:leave` hace dos cosas distintas según dónde estés, porque son dos cosas distintas:
+
+- **En el lobby** la silla se libera de verdad: vuelve a haber lugar, el color queda disponible, el
+  host pasa a otro si el que se fue era el host, y si era el último la sala se borra con todo.
+- **Con la partida empezada** la silla no se puede liberar: los jugadores quedan fijos al crear la
+  partida y una partida es `seed` + acciones sobre esa lista. Salir es irse de la mesa; el asiento
+  queda desconectado y el token del navegador sigue alcanzando para volver.
+
+El botón pregunta antes en los tres lugares donde aparece (lobby, partida, pantalla final), con un
+renglón distinto en cada uno diciendo qué pasa de verdad. En el lobby el token se olvida, porque la
+silla ya no existe; en los otros dos no.
+
+**Un bug viejo que apareció haciendo esto**: el "Volver al inicio" de la pantalla final era un
+`window.location.reload()`, y como la sala seguía siendo la última de este navegador, el arranque
+te metía de vuelta adentro. No volvía al inicio. Ahora sale de verdad, y `leftRoom` en el store
+frena el reingreso automático en la misma sesión.
+
+---
+
 ## Decisiones tomadas sin consulta
 
 Pendientes de revisión. Todas se eligieron por el criterio "lo más conservador y consistente con el

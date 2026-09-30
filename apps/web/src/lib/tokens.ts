@@ -50,6 +50,15 @@ export const writeLastRoom = (code: string): void => {
   }
 };
 
+/** Stops a reload from walking back into a room you left on purpose. */
+export const forgetLastRoom = (): void => {
+  try {
+    window.localStorage.removeItem(LAST_ROOM);
+  } catch {
+    // Nothing to do.
+  }
+};
+
 export const readName = (): string | undefined => {
   try {
     return window.localStorage.getItem(LAST_NAME) ?? undefined;

@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import type { Action, BoardMode, GameEvent, PlayerView } from '@tierra-austral/engine';
 import { socket } from '../net/socket.js';
 import {
+  forgetLastRoom,
+  forgetToken,
   readLastRoom,
   readName,
   readRoomFromUrl,
@@ -96,6 +98,15 @@ interface GameStore {
   chatSeen: number;
   markChatSeen: () => void;
   error: string | undefined;
+  /**
+   * The code of the room you walked out of, this session.
+   *
+   * Two jobs: it stops the automatic "walk back into your last room" from
+   * dragging you straight back in — which it would, since leaving is exactly
+   * the state that rule looks for — and it puts the code back in the join box
+   * so coming back is one click.
+   */
+  leftRoom: string | undefined;
   createRoom: (name: string) => void;
   joinRoom: (code: string, name: string) => void;
   setColor: (color: string) => void;
@@ -109,6 +120,11 @@ interface GameStore {
   rematch: () => void;
   newBoard: () => void;
   setBoardMode: (mode: BoardMode) => void;
+  /**
+   * Walk out. In the lobby the seat is given up; in a game it is kept, so the
+   * token still brings you back to it.
+   */
+  leaveRoom: (options?: { readonly forget?: boolean }) => void;
   proposeRestart: () => void;
   voteRestart: (approve: boolean) => void;
   clearError: () => void;
@@ -198,6 +214,7 @@ export const useGame = create<GameStore>((set, get) => {
     room: undefined,
     view: undefined,
     error: undefined,
+    leftRoom: undefined,
     events: [],
     chat: [],
     chatSeen: 0,
@@ -209,12 +226,12 @@ export const useGame = create<GameStore>((set, get) => {
       writeName(name);
       // A different room is a different conversation; the server sends the
       // history for this one right after the session.
-      set({ error: undefined, events: [], chat: [], chatSeen: 0 });
+      set({ error: undefined, events: [], chat: [], chatSeen: 0, leftRoom: undefined });
       socket.emit('room:create', { name });
     },
     joinRoom: (code, name) => {
       writeName(name);
-      set({ error: undefined, events: [], chat: [], chatSeen: 0 });
+      set({ error: undefined, events: [], chat: [], chatSeen: 0, leftRoom: undefined });
       const token = readToken(code);
       socket.emit('room:join', { code: code.toUpperCase(), name, ...(token ? { token } : {}) });
     },
@@ -258,6 +275,25 @@ export const useGame = create<GameStore>((set, get) => {
     },
     sendChat: (text) => {
       socket.emit('chat:send', { text });
+    },
+    leaveRoom: (options) => {
+      const code = get().room?.code;
+      socket.emit('room:leave');
+      // A room you walked out of should not be the one a reload takes you
+      // back to. The token only goes when the seat did.
+      forgetLastRoom();
+      if (options?.forget === true && code !== undefined) forgetToken(code);
+      set({
+        room: undefined,
+        view: undefined,
+        playerId: undefined,
+        events: [],
+        chat: [],
+        chatSeen: 0,
+        effects: [],
+        error: undefined,
+        ...(code === undefined ? {} : { leftRoom: code }),
+      });
     },
     rematch: () => {
       set({ events: [], error: undefined });

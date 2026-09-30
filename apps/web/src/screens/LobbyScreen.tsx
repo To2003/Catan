@@ -9,6 +9,7 @@ import {
 import { useGame } from '../store/gameStore.js';
 import { Chat } from '../components/Chat.js';
 import { CopyButton } from '../components/CopyButton.js';
+import { LeaveButton } from '../components/LeaveButton.js';
 import { RulesButton } from '../components/Rules.js';
 import { SegmentedControl, type Segment } from '../components/SegmentedControl.js';
 import { Seat } from '../components/lobby/Seat.js';
@@ -284,7 +285,10 @@ export function LobbyScreen() {
               </p>
             )}
           </div>
-          <RulesButton className="self-start" />
+          <div className="flex items-center gap-2">
+            <RulesButton />
+            <LeaveButton from="lobby" className="ml-auto" />
+          </div>
         </div>
 
         {/* ── The room's conversation ─────────────────────────────────── */}

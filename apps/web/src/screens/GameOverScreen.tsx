@@ -2,6 +2,7 @@ import type { PlayerId } from '@tierra-austral/engine';
 import { useGame } from '../store/gameStore.js';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
 import { BOARD_MODE_LABELS } from '../lib/boardModes.js';
+import { LeaveButton } from '../components/LeaveButton.js';
 
 /**
  * How the game ended, broken down, and the chance to play another one in the
@@ -133,15 +134,10 @@ export function GameOverScreen() {
         ) : (
           <p className="text-xs text-stone-500">Esperando la revancha del host…</p>
         )}
-        <button
-          type="button"
-          onClick={() => {
-            window.location.reload();
-          }}
-          className="rounded bg-stone-700 px-4 py-2 font-semibold hover:bg-stone-600"
-        >
-          Volver al inicio
-        </button>
+        {/* A reload used to be the way out, which was not one: the room was
+            still the last one this browser was in, so it walked straight back
+            into it. Leaving properly gives the server the chance to know. */}
+        <LeaveButton from="over" className="px-4 py-2 text-[14px]" />
       </div>
     </main>
   );

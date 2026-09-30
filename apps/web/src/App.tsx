@@ -25,11 +25,14 @@ export function App() {
   const view = useGame((state) => state.view);
   const connected = useGame((state) => state.connected);
   const resume = useGame((state) => state.resume);
+  const leftRoom = useGame((state) => state.leftRoom);
 
-  // Once the socket is up, try to walk back into the last room.
+  // Once the socket is up, try to walk back into the last room — unless you
+  // just walked out of one, which looks identical from here and is the
+  // opposite of what you asked for.
   useEffect(() => {
-    if (connected && !room && !hotSeat && !boardOnly) resume();
-  }, [connected, room, resume]);
+    if (connected && !room && !leftRoom && !hotSeat && !boardOnly) resume();
+  }, [connected, room, leftRoom, resume]);
 
   if (hotSeat) return <HotSeatScreen />;
   if (boardOnly) return <BoardScreen />;

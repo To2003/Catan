@@ -10,10 +10,12 @@ export function HomeScreen() {
   const connected = useGame((state) => state.connected);
   const error = useGame((state) => state.error);
 
+  // The room you just left, so getting back in is one click.
+  const leftRoom = useGame((state) => state.leftRoom);
   const [name, setName] = useState('');
   // A shared link wins over the last room this browser was in: somebody sent
   // you here on purpose.
-  const [code, setCode] = useState(readInviteCodeFromUrl() ?? readLastRoom() ?? '');
+  const [code, setCode] = useState(leftRoom ?? readInviteCodeFromUrl() ?? readLastRoom() ?? '');
 
   const canPlay = connected && name.trim().length > 0;
 

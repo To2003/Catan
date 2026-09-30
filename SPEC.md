@@ -435,19 +435,23 @@ Se hace un DFS sobre las aristas del jugador, arrancando desde cada vértice ext
 | `chat:send`         | `{ text }`                                    |
 | `room:forceTurn`    | — (solo el host, pasados 2 minutos)           |
 | `room:setBoardMode` | `{ mode }` — solo el host, solo en el lobby   |
+| `room:leave`        | — (dejar la silla, o irse de la mesa)         |
 
 **Servidor → cliente**
 
-| Evento             | Payload                                                   |
-| ------------------ | --------------------------------------------------------- |
-| `room:state`       | jugadores, colores, estado de "listo" y host              |
-| `game:state`       | `PlayerView` filtrado para ese jugador                    |
-| `game:events`      | eventos nuevos para animaciones y log                     |
-| `game:error`       | `{ code, message }`                                       |
-| `chat:message`     | `{ id, at, kind, from?, text }`                           |
-| `chat:history`     | las últimas 200 líneas, al entrar o al volver             |
-| `session`          | `{ playerId, token, code }` — **solo a su propio socket** |
-| `session:replaced` | — (el mismo token entró desde otra pestaña)               |
+| Evento             | Payload                                                     |
+| ------------------ | ----------------------------------------------------------- |
+| `room:state`       | jugadores, colores, estado de "listo" y host                |
+| `game:state`       | `PlayerView` filtrado para ese jugador                      |
+| `game:events`      | eventos nuevos para animaciones y log                       |
+| `game:error`       | `{ code, message }`                                         |
+| `chat:message`     | `{ id, at, kind, from?, text }`                             |
+| `chat:history`     | las últimas 200 líneas, al entrar o al volver               |
+| `room:left`        | `{ seatKept }` — confirmación de salida, a su propio socket |
+| `session`          | `{ playerId, token, code }` — **solo a su propio socket**   |
+| `session:replaced` | — (el mismo token entró desde otra pestaña)                 |
+
+- **Salir quiere decir dos cosas.** En el lobby la silla se libera: el color vuelve a estar disponible, el host pasa a otro si el que se fue era el host, y si era el último la sala se borra entera. Con la partida empezada la silla **no** se puede liberar —los jugadores quedan fijos en el estado y una partida es `seed` + acciones sobre esa lista—, así que salir es irse de la mesa: el asiento queda desconectado y el token del navegador sigue alcanzando para volver. El servidor responde `room:left` con `seatKept` para que el cliente sepa cuál de las dos pasó.
 
 - **El chat es de la sala, no de la partida.** Sobrevive al arranque, al reinicio por voto, a la revancha y a la reconexión, y se va con la sala en la limpieza de 24 h. La sala guarda las últimas 200 líneas en SQLite, así que un servidor que se duerme no se lleva la conversación puesta. El autor lo resuelve el servidor desde la sesión del socket: el payload trae el texto y nada más. Las líneas de sistema (entradas, salidas, votos de reinicio, victoria) no tienen autor y se guardan ya redactadas. Todo se muestra como texto plano.
 
