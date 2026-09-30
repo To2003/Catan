@@ -775,6 +775,53 @@ sus tests, y el fuzz la tiene con peso 0 para que no corte las partidas que est�
 
 ---
 
+## Tablero y carta de costos ✅
+
+### Puertos: el diagnóstico primero
+
+Medí las 540 patas (9 puertos × 10 semillas × 3 modos × 2 patas) antes de tocar nada, y las tres
+hipótesis que me pasaste salieron así:
+
+- **(a) un hex tapa la pata** — **falso**. Cero patas cruzan el interior de su hex: salen hacia
+  afuera del tablero. (Igual moví los puertos por encima del terreno, que es lo robusto.)
+- **(b) el círculo se come la pata** — **cierto, pero por otra razón**. El badge se colocaba sobre
+  la **dirección radial desde el centro del tablero**, no sobre la **perpendicular a su arista**.
+  Para tres de los nueve puertos esas direcciones difieren **49,1°**, lo suficiente para que el
+  círculo se corra contra un vértice: esa pata medía **0,337** contra un radio de **0,33**. Siete
+  milésimas de pata asomando. Otros tres están a 23,4° y quedaban cortos pero visibles.
+- **(c) el color se confunde** — **falso** como causa, aunque la pata era fina y sin filo.
+
+Con el badge sobre la perpendicular las dos patas son iguales por construcción. Medido en píxeles
+sobre el render: los 18 tramos asoman **36 px**, los nueve puertos idénticos.
+
+### Piezas
+
+Galería en `?sprites=1`: 4 colores × 6 terrenos × camino, pueblo y ciudad, a 1x y 2x. Dos
+decisiones que salieron de mirarla, anotadas en DESIGN.md: se distinguen **por silueta** (la
+ciudad lleva torre almenada, no más tamaño) y cada pieza se dibuja **tres veces** — halo oscuro,
+cuerpo, filo claro fino — porque un solo contorno no sirve para seis terrenos: el oscuro
+desaparece en el bosque y el claro en el desierto. Escala 1,45x, en una sola constante.
+
+### Carta de costos
+
+`LegalMoves.canAfford` se calcula en el engine **solo con la mano**: sin fase, sin turno y sin
+mirar si hay lugar. Con `settlements.length > 0` la tarjeta se apagaría entera en el turno ajeno,
+que es justo cuando uno la mira para planear. Todos los números salen de las constantes y hay un
+test que cuenta los íconos renderizados contra `COSTS` y `VICTORY_POINTS`.
+
+Tres formas según el lugar que hay, con una media query de verdad y **una sola instancia montada**
+(con clases serían tres copias de cada título en el documento, y además el default por tramo no se
+puede expresar en CSS: abierta en su columna, cerrada donde taparía el tablero).
+
+**El tablero no se achica nada** con la columna abierta: 549×507 en 1366×768 con y sin ella. Está
+limitado por el alto, así que los 220 px salen de espacio que estaba vacío.
+
+**Bug encontrado de paso**: en la pantalla de partida, en celular, las secciones se pisaban — el
+mismo encogimiento de flex que había tenido el lobby. El cajón de costos lo hizo visible. El
+tablero en celular pasó de 286 a 313 px.
+
+---
+
 ## Decisiones tomadas sin consulta
 
 Pendientes de revisión. Todas se eligieron por el criterio "lo más conservador y consistente con el

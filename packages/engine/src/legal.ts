@@ -1,4 +1,4 @@
-import { DEV_CARDS, RESOURCES } from './constants.js';
+import { COSTS, DEV_CARDS, RESOURCES } from './constants.js';
 import { availableMaritimeRates } from './rules/trade.js';
 import { canCounterOffer, canOpenOffer, isLegalAction, validateAction } from './validate.js';
 import type {
@@ -10,6 +10,7 @@ import type {
   PlayerId,
   ReadonlyGameState,
   Resource,
+  ResourceBundle,
   VertexId,
 } from './types.js';
 
@@ -124,6 +125,17 @@ export interface LegalMoves {
   readonly offers: Readonly<Record<string, OfferOptions>>;
   readonly canRoll: boolean;
   readonly canEndTurn: boolean;
+  /**
+   * Whether the hand covers each price, and nothing else.
+   *
+   * Deliberately **not** "may you build this right now": it ignores whose
+   * turn it is, the phase, and whether there is anywhere legal to put the
+   * thing. The cost card asks a narrower question — "do I have the cards
+   * yet" — and answering it with `settlements.length > 0` would make the
+   * whole card go dark on somebody else's turn, which is exactly when people
+   * are looking at it to plan.
+   */
+  readonly canAfford: Readonly<Record<'road' | 'settlement' | 'city' | 'devCard', boolean>>;
   /** How many cards this player owes right now, if any (SPEC.md §4.8). */
   readonly discardOwed?: number;
 }
@@ -193,6 +205,20 @@ const offerOptions = (
   return options;
 };
 
+/** Whether a hand covers a price. The only question the cost card asks. */
+const affords = (state: ReadonlyGameState, playerId: PlayerId): LegalMoves['canAfford'] => {
+  const hand = state.players.find((player) => player.id === playerId)?.resources;
+  const covers = (cost: ResourceBundle): boolean =>
+    hand !== undefined && RESOURCES.every((resource) => hand[resource] >= cost[resource]);
+
+  return {
+    road: covers(COSTS.road),
+    settlement: covers(COSTS.settlement),
+    city: covers(COSTS.city),
+    devCard: covers(COSTS.devCard),
+  };
+};
+
 export const legalMoves = (state: ReadonlyGameState, playerId: PlayerId): LegalMoves => {
   const owed = state.phase.kind === 'discard' ? state.phase.pending[playerId] : undefined;
 
@@ -210,6 +236,7 @@ export const legalMoves = (state: ReadonlyGameState, playerId: PlayerId): LegalM
     offers: offerOptions(state, playerId),
     canRoll: canRollDice(state, playerId),
     canEndTurn: canEndTurn(state, playerId),
+    canAfford: affords(state, playerId),
     ...(owed === undefined ? {} : { discardOwed: owed }),
   };
 };

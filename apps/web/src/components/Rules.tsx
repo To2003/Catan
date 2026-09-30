@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 // file, so what is on screen and what is on GitHub can never disagree.
 import source from '../../../../REGLAS.md?raw';
 import { parseMarkdown, type Block, type Inline } from '../lib/markdown.js';
+import { CostCard } from './CostCard.js';
 
 function Text({ content }: { readonly content: readonly Inline[] }) {
   return (
@@ -154,6 +155,11 @@ export function RulesSheet({ onClose }: { readonly onClose: () => void }) {
         </div>
 
         <div className="overflow-y-auto px-5 py-4 text-[14px] text-stone-300">
+          {/* The same card the game shows down its left edge, so the prices
+              somebody reads here are the prices they will see there. */}
+          <div className="mb-6 rounded-panel bg-chapa/40 p-4">
+            <CostCard />
+          </div>
           <Blocks blocks={blocks} />
         </div>
       </div>

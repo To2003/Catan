@@ -46,10 +46,28 @@ Escala: 11 / 13 / 15 / 20 / 32 / 52. Los números del tablero y los puntajes van
   finos en el bosque, surcos en los campos, punteado de arcilla en las colinas, pasto inclinado
   por el viento en el pastizal, curvas de nivel en la montaña. Sin imágenes: patrones SVG, que
   pesan nada y escalan.
+- **Puertos**: el círculo va sobre la **perpendicular al punto medio de su arista**, no sobre la
+  dirección del centro del tablero. No son lo mismo: para tres de los nueve puertos esas dos
+  direcciones difieren 49°, lo suficiente para que el círculo se corra contra uno de los dos
+  vértices y se trague esa pata entera. Las patas son madera clara sobre un filo oscuro, y los
+  puertos se dibujan **encima** del terreno.
+
 - **Fichas de número**: discos de esmalte. Crema, anillo fino oscuro, una sombra interior que
   las despega del terreno. El 6 y el 8 en rojo lenga, como siempre.
-- **Piezas**: casas con techo a dos aguas y un costado más oscuro, ciudades con un segundo
-  cuerpo, caminos con un bisel. Dos tonos por pieza alcanzan para dar volumen sin gradientes.
+- **Piezas**: casas con techo a dos aguas y un costado más oscuro, ciudades con **una torre
+  almenada** al lado del cuerpo, caminos con un bisel. Dos tonos por pieza alcanzan para dar
+  volumen sin gradientes.
+
+  Dos decisiones que salieron de mirarlas sobre los seis terrenos (`?sprites=1`):
+
+  - **Se distinguen por silueta, no por tamaño.** Dos casas de distinto tamaño son dos casas; una
+    torre contra un techo es otro edificio incluso a seis píxeles de alto. Por eso la ciudad lleva
+    torre y almenas y no simplemente más cuerpo.
+  - **Cada pieza se dibuja tres veces: halo oscuro, cuerpo, filo claro fino.** Un solo contorno no
+    alcanza para seis terrenos — uno oscuro desaparece en el bosque y uno claro en el desierto —, y
+    el caso que lo forzó fue el verde sobre el pastizal. El halo además hace de sombra proyectada.
+    Todo escala con una sola constante (`SCALE` en `Pieces.tsx`), hoy en 1,45.
+
 - **Cartas**: papel crema con el borde del color del recurso y una ilustración simple en SVG.
 
 ## Jerarquía de pantalla

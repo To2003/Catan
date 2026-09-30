@@ -89,11 +89,6 @@ export function Board({ board, robberHex, debug, interaction }: BoardProps) {
       >
         <TerrainPatterns />
         <g>
-          {board.ports.map((port) => (
-            <Port key={port.edge} port={port} board={board} />
-          ))}
-        </g>
-        <g>
           {board.hexIds.map((id) => {
             const hex = board.hexes[id];
             if (!hex) return null;
@@ -144,6 +139,15 @@ export function Board({ board, robberHex, debug, interaction }: BoardProps) {
             edges={interaction.markedEdges ?? []}
           />
         ) : null}
+
+        {/* Harbours go over the terrain, not under it. Their jetties start on
+            the coastline itself, so anything painted afterwards can eat the
+            end of one. */}
+        <g>
+          {board.ports.map((port) => (
+            <Port key={port.edge} port={port} board={board} />
+          ))}
+        </g>
 
         {robber ? <Robber center={robber.center} /> : null}
 

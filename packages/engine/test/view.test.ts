@@ -232,6 +232,58 @@ describe('a player view keeps the secrets', () => {
   });
 });
 
+describe('what the hand can pay for', () => {
+  it('answers only about the cards, not about whose turn it is', () => {
+    const rich = draft(runSetup(), (state) => {
+      state.currentPlayer = state.players[1]?.id ?? ANA.id;
+      const ana = state.players.find((player) => player.id === ANA.id);
+      if (ana) ana.resources = { wood: 1, brick: 1, sheep: 1, wheat: 3, ore: 3 };
+    });
+
+    // Not Ana's turn, nowhere legal to build during setup — and the card
+    // still says what she could pay for, which is the point of it.
+    const moves = getPlayerView(rich, ANA.id).legalMoves;
+    expect(moves.canAfford).toEqual({
+      road: true,
+      settlement: true,
+      city: true,
+      devCard: true,
+    });
+    expect(moves.settlements).toEqual([]);
+  });
+
+  it('is false for what the hand does not cover', () => {
+    const poor = draft(runSetup(), (state) => {
+      // Setup already paid her for the second settlement, so start from empty.
+      const ana = state.players.find((player) => player.id === ANA.id);
+      if (ana) ana.resources = { wood: 1, brick: 0, sheep: 0, wheat: 0, ore: 0 };
+    });
+    expect(getPlayerView(poor, ANA.id).legalMoves.canAfford).toEqual({
+      road: false,
+      settlement: false,
+      city: false,
+      devCard: false,
+    });
+  });
+
+  it('says nothing about anybody else’s hand', () => {
+    // A rival's purse must not move Ana's card. This is the same differential
+    // check as the one above for cards, applied to the new field.
+    const base = draft(runSetup(), (state) => {
+      const ana = state.players.find((player) => player.id === ANA.id);
+      if (ana) ana.resources = { wood: 1, brick: 1, sheep: 0, wheat: 0, ore: 0 };
+    });
+    const rivalRich = draft(base, (state) => {
+      const other = state.players.find((player) => player.id !== ANA.id);
+      if (other) other.resources = { wood: 9, brick: 9, sheep: 9, wheat: 9, ore: 9 };
+    });
+
+    expect(getPlayerView(rivalRich, ANA.id).legalMoves.canAfford).toEqual(
+      getPlayerView(base, ANA.id).legalMoves.canAfford,
+    );
+  });
+});
+
 describe('the legal moves inside a view', () => {
   it('match what the engine would answer directly', () => {
     for (const state of playedStates(2, 60)) {

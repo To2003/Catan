@@ -5,6 +5,7 @@ import { GoneScreen } from './screens/GoneScreen.js';
 import { HomeScreen } from './screens/HomeScreen.js';
 import { HotSeatScreen } from './screens/HotSeatScreen.js';
 import { LobbyScreen } from './screens/LobbyScreen.js';
+import { SpritesScreen } from './screens/SpritesScreen.js';
 import { useEffect } from 'react';
 import { readHotSeatFromUrl } from './lib/seed.js';
 import { useGame } from './store/gameStore.js';
@@ -20,6 +21,8 @@ import { useGame } from './store/gameStore.js';
  */
 const hotSeat = readHotSeatFromUrl();
 const boardOnly = new URLSearchParams(window.location.search).get('board') === '1';
+/** The piece gallery: every colour on every terrain, for checking contrast. */
+const sprites = new URLSearchParams(window.location.search).get('sprites') === '1';
 
 export function App() {
   const room = useGame((state) => state.room);
@@ -33,10 +36,11 @@ export function App() {
   // just walked out of one, which looks identical from here and is the
   // opposite of what you asked for.
   useEffect(() => {
-    if (connected && !room && !leftRoom && !gone && !hotSeat && !boardOnly) resume();
+    if (connected && !room && !leftRoom && !gone && !hotSeat && !boardOnly && !sprites) resume();
   }, [connected, room, leftRoom, gone, resume]);
 
   if (hotSeat) return <HotSeatScreen />;
+  if (sprites) return <SpritesScreen />;
   if (boardOnly) return <BoardScreen />;
 
   // A door that closed gets its own screen: dropping somebody back at the

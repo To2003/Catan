@@ -27,6 +27,7 @@ import { RobberHint } from '../components/RobberHint.js';
 import { LeaveButton } from '../components/LeaveButton.js';
 import { RulesButton } from '../components/Rules.js';
 import { CodeText, EyeButton, useHiddenCode } from '../components/RoomCode.js';
+import { CostColumn } from '../components/CostColumn.js';
 import { DiceRoll } from '../components/DiceRoll.js';
 import { isMuted, setMuted, sounds } from '../lib/sounds.js';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
@@ -361,7 +362,15 @@ export function GameScreen() {
         </div>
       </header>
 
-      <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
+      {/* Stacked on a phone, the children must not shrink below their own
+          content: a flex item that does spills out of itself and paints over
+          whatever comes next. The column scrolls instead. Side by side from
+          `lg` up, each panel scrolls on its own and the page never does. */}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+        {/* The left edge was empty. What goes there is the one thing you look
+            up mid-turn and cannot get from the board. */}
+        <CostColumn canAfford={view.legalMoves.canAfford} stock={view.me.stock} />
+
         {roll ? (
           <RollOverlay
             dice={roll.dice}
@@ -385,7 +394,7 @@ export function GameScreen() {
         ) : null}
 
         <section
-          className="relative flex min-h-0 flex-1 flex-col px-2 py-1"
+          className="relative flex shrink-0 flex-col px-2 py-1 lg:min-h-0 lg:flex-1"
           onMouseMove={(event) => {
             if (hoveredHex !== undefined) setPointer({ x: event.clientX, y: event.clientY });
           }}
@@ -461,10 +470,18 @@ export function GameScreen() {
           <RobberHint view={view} hex={hoveredHex} at={pointer} nameOf={nameOf} />
         ) : null}
 
-        <aside className="flex w-full flex-col gap-3 overflow-y-auto border-t border-chapa bg-noche p-3 text-sm lg:w-[21rem] lg:min-w-[21rem] lg:border-t-0 lg:border-l">
+        <aside className="flex w-full shrink-0 flex-col gap-3 border-t border-chapa bg-noche p-3 text-sm lg:w-[21rem] lg:min-w-[21rem] lg:overflow-y-auto lg:border-t-0 lg:border-l">
           {/* 1. The buttons that answer whatever the top bar is asking for.
-              The sentence itself lives there and only there. */}
-          <section className="rounded-panel bg-chapa p-2">
+              The sentence itself lives there and only there — and when there
+              is nothing to press, the panel is not there either. An empty
+              strip of chrome reads as something that failed to load. */}
+          <section
+            className={`rounded-panel bg-chapa p-2 ${
+              showRoll || showEndTurn || blocked || view.legalMoves.stealTargets.length > 0
+                ? ''
+                : 'hidden'
+            }`}
+          >
             <div className="flex flex-wrap gap-2">
               {showRoll ? (
                 <button
@@ -537,11 +554,6 @@ export function GameScreen() {
                 </div>
               </div>
             ) : null}
-
-            <p className="mt-2 text-[13px] text-guanaco-apagado">
-              Te quedan {view.me.stock.roads} caminos · {view.me.stock.settlements} pueblos ·{' '}
-              {view.me.stock.cities} ciudades
-            </p>
           </section>
 
           {room ? (
