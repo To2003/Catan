@@ -216,3 +216,113 @@ body {
     animation: none;
   }
 }
+
+/* A board that was swapped for another one. Short and one-way: it is there so
+   a new draw reads as a new draw, not as decoration on every render. The
+   element is remounted on a key, which is what replays it. */
+@keyframes board-swap {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.board-swap {
+  animation: board-swap 220ms ease-out;
+}
+
+/* Keyboard focus has to be visible everywhere, including on the swatches and
+   segmented controls, where the component's own ring is a selection mark and
+   not a focus mark. */
+:focus-visible {
+  outline: 2px solid var(--color-estepa);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-swap {
+    animation: none;
+  }
+}
+
+/* ── The lobby's three jobs ──────────────────────────────────────────────
+   Seating people, agreeing on a board, and talking while you wait. Written
+   as real media queries with named areas rather than a pile of utility
+   variants: the three arrangements are the point, and this way all three are
+   readable in one place.
+
+   Phone: one column, and the ready/start pair sticks to the bottom of the
+   scroll so it is never a scroll away.
+   Tablet: the board moves under the room, the chat takes the right.
+   Desktop, from 1100px: the three columns the design asks for. */
+.lobby {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow-y: auto;
+}
+
+/* Flex items shrink by default, and a column that is allowed to shrink below
+   its content spills out of itself — which is exactly how the seats ended up
+   printed over the board on a phone. Nothing here shrinks; the column
+   scrolls instead. */
+.lobby > * {
+  flex: none;
+}
+
+.lobby-acciones {
+  position: sticky;
+  /* Flush with the bottom of the scrollport: `bottom: 0` would stop at the
+     container's padding edge and leave a sliver of board sliding past under
+     the buttons. */
+  bottom: -0.75rem;
+  z-index: 1;
+  background-color: var(--color-noche);
+  /* A rule above it, so the space between the seats and the buttons reads as
+     a footer rather than as a gap nobody filled. */
+  border-top: 1px solid var(--color-chapa);
+  padding-block: 0.5rem 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .lobby {
+    display: grid;
+    overflow: hidden;
+    grid-template-columns: minmax(0, 1fr) 20rem;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'sala     chat'
+      'tablero  chat'
+      'acciones chat';
+  }
+
+  .lobby-acciones {
+    position: static;
+    padding-block: 0.75rem 0;
+  }
+}
+
+@media (min-width: 1100px) {
+  .lobby {
+    grid-template-columns: 21rem minmax(0, 1fr) 20rem;
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'sala     tablero chat'
+      'acciones tablero chat';
+  }
+}
+
+.lobby-sala {
+  grid-area: sala;
+}
+.lobby-tablero {
+  grid-area: tablero;
+}
+.lobby-acciones {
+  grid-area: acciones;
+}
+.lobby-chat {
+  grid-area: chat;
+}

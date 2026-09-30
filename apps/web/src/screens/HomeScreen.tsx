@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useGame } from '../store/gameStore.js';
-import { readLastRoom } from '../lib/tokens.js';
+import { readInviteCodeFromUrl, readLastRoom } from '../lib/tokens.js';
 import { RulesButton } from '../components/Rules.js';
 
 /** Create a room or join one with a code. */
@@ -11,7 +11,9 @@ export function HomeScreen() {
   const error = useGame((state) => state.error);
 
   const [name, setName] = useState('');
-  const [code, setCode] = useState(readLastRoom() ?? '');
+  // A shared link wins over the last room this browser was in: somebody sent
+  // you here on purpose.
+  const [code, setCode] = useState(readInviteCodeFromUrl() ?? readLastRoom() ?? '');
 
   const canPlay = connected && name.trim().length > 0;
 

@@ -73,6 +73,23 @@ export const writeName = (name: string): void => {
  * also a perfectly good reconnect link: the token is required either way, so
  * this grants nothing that holding the token did not already grant.
  */
+/**
+ * A room code handed over in the address bar, from a shared link.
+ *
+ * Separate from `readRoomFromUrl`, which needs a token and a name as well and
+ * sits you straight down in your own seat. This one only pre-fills the code
+ * box: the link somebody pastes into a chat should open the door, not hand
+ * over a seat.
+ */
+export const readInviteCodeFromUrl = (): string | undefined => {
+  const code = new URLSearchParams(window.location.search).get('room');
+  return code === null || code.trim() === '' ? undefined : code.toUpperCase().slice(0, 5);
+};
+
+/** The link to share so somebody lands on the join box with the code filled in. */
+export const inviteLink = (code: string): string =>
+  `${window.location.origin}${window.location.pathname}?room=${code}`;
+
 export const readRoomFromUrl = (): { code: string; token: string; name: string } | undefined => {
   const params = new URLSearchParams(window.location.search);
   const code = params.get('room');

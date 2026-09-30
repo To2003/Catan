@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { PlayerId } from '@tierra-austral/engine';
 import type { ChatMessage } from '../store/gameStore.js';
 import { MAX_CHAT_LENGTH } from '../lib/timing.js';
@@ -16,6 +16,14 @@ interface ChatProps {
   readonly collapsible?: boolean;
   /** How tall the list may grow. The lobby has room; the side panel does not. */
   readonly height?: string;
+  /**
+   * Fill the height of whatever contains it, with the input pinned at the
+   * bottom. That is what the lobby's own column wants; the game's side panel
+   * wants the opposite, a box that ends where its content ends.
+   */
+  readonly fill?: boolean;
+  /** Put the cursor in the box on arrival. Only where typing is the point. */
+  readonly autoFocus?: boolean;
 }
 
 /**
@@ -33,8 +41,15 @@ export function Chat({
   onSend,
   collapsible = true,
   height = 'max-h-28',
+  fill = false,
+  autoFocus = false,
 }: ChatProps) {
   const [text, setText] = useState('');
+  const input = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (autoFocus) input.current?.focus();
+  }, [autoFocus]);
   const [open, setOpen] = useState(true);
   // Set when collapsing, so "unread" is a subtraction rather than a counter
   // that has to be kept in step with arrivals.
@@ -44,7 +59,7 @@ export function Chat({
   const showing = open || !collapsible;
 
   return (
-    <div>
+    <div className={fill ? 'flex h-full min-h-0 flex-col' : ''}>
       {collapsible ? (
         <button
           type="button"
@@ -72,7 +87,8 @@ export function Chat({
         <>
           <ScrollPane
             itemCount={messages.length}
-            className={`${height} overflow-y-auto pr-1`}
+            {...(fill ? { frameClassName: 'flex-1' } : {})}
+            className={`${fill ? 'h-full' : height} overflow-y-auto pr-1`}
             label={(count) =>
               `${count} mensaje${count === 1 ? '' : 's'} nuevo${count === 1 ? '' : 's'}`
             }
@@ -107,9 +123,10 @@ export function Chat({
               onSend(trimmed);
               setText('');
             }}
-            className="mt-1 flex gap-1"
+            className="mt-2 flex shrink-0 gap-1"
           >
             <input
+              ref={input}
               value={text}
               maxLength={MAX_CHAT_LENGTH}
               placeholder="Escribí algo"
