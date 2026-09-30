@@ -549,6 +549,8 @@ const playRandomGame = (seed: number, fuzzState: RngState): { game: PlayedGame; 
   const playedCards: DevCard[] = [];
   const knightsSeen = new Map<PlayerId, number>();
   let cardsPlayedThisTurn = 0;
+  /** Turns handed over, counted from the events rather than read off the state. */
+  let turnsEnded = 0;
 
   for (let step = 0; step < MAX_ACTIONS; step += 1) {
     if (state.phase.kind === 'gameOver') {
@@ -582,7 +584,18 @@ const playRandomGame = (seed: number, fuzzState: RngState): { game: PlayedGame; 
           knightsSeen.set(event.player, (knightsSeen.get(event.player) ?? 0) + 1);
         }
       }
-      if (event.type === 'TurnEnded') cardsPlayedThisTurn = 0;
+      if (event.type === 'TurnEnded') {
+        cardsPlayedThisTurn = 0;
+        turnsEnded += 1;
+      }
+    }
+
+    // 10. The turn counter is the number of hand-overs plus the one that is
+    // being played, and it stays at zero for the whole opening placement.
+    if (state.phase.kind === 'setup') {
+      expect(state.turn, `${context} — turn during setup`).toBe(0);
+    } else {
+      expect(state.turn, `${context} — turn vs TurnEnded`).toBe(turnsEnded + 1);
     }
 
     // 9. One development card per turn, counted across the turn rather than

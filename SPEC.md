@@ -320,6 +320,7 @@ interface GameState {
   players: Player[];
   turnOrder: PlayerId[];
   currentPlayer: PlayerId;
+  turn: number; // 0 durante la preparación, 1 en el primer turno, +1 por endTurn
   phase: Phase;
   lastRoll?: [number, number];
   bank: ResourceBundle;

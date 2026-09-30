@@ -275,6 +275,16 @@ export function GameScreen() {
   const showRoll = phase === 'preRoll';
   const showEndTurn = phase === 'main';
   const inSetup = phase === 'setup';
+  /**
+   * Where the game is up to, in the words people use at the table.
+   *
+   * The number comes from the engine, not from counting events here: a reload
+   * arrives with no history to count (SPEC.md §6).
+   */
+  const whereWeAre =
+    view.phase.kind === 'setup'
+      ? `Preparación · ${view.phase.round === 1 ? 'ida' : 'vuelta'}`
+      : `Ronda ${view.round}`;
   const pickedTotal = RESOURCES.reduce((sum, resource) => sum + (picked[resource] ?? 0), 0);
   const unreadChat = tab === 'chat' ? 0 : Math.max(0, chat.length - chatSeen);
   const owed = view.legalMoves.discardOwed;
@@ -294,6 +304,12 @@ export function GameScreen() {
           {room?.code}
         </span>
         <DiceRoll dice={view.lastRoll} roll={rolls} />
+        <span
+          title="Una ronda es una vuelta completa a la mesa"
+          className="font-display rounded-panel bg-chapa px-2 py-0.5 text-[13px]"
+        >
+          {whereWeAre}
+        </span>
         <TurnBanner view={view} nameOf={nameOf} />
         {error ? (
           <span className="rounded bg-bordo px-2 py-1 text-[13px] font-semibold">{error}</span>
@@ -628,6 +644,8 @@ export function GameScreen() {
               <EventLog
                 events={events}
                 you={view.you}
+                turn={view.turn}
+                players={view.turnOrder.length}
                 context={{ nameOf, hexLabel }}
                 debug={debugLog}
               />

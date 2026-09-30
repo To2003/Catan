@@ -21,6 +21,7 @@ export const endTurn = (draft: GameState, playerId: PlayerId, events: GameEvent[
   clearOffers(draft, events);
 
   draft.currentPlayer = next;
+  draft.turn += 1;
   draft.phase = { kind: 'preRoll' };
   events.push({ type: 'TurnEnded', player: playerId, next });
   events.push({ type: 'PhaseChanged', phase: draft.phase });

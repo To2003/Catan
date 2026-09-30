@@ -263,6 +263,21 @@ export interface GameState {
   /** Drawn once at `createGame`; setup round 2 walks it backwards. */
   readonly turnOrder: readonly PlayerId[];
   currentPlayer: PlayerId;
+  /**
+   * Which turn of the game this is, counting from the first one after setup.
+   *
+   * It is 0 for the whole of the opening placement and becomes 1 the moment
+   * the snake finishes, then goes up by one on every `endTurn` — including the
+   * ones the server forces on an absent player. A round is a full lap of the
+   * turn order, so it divides out of this and the seat count rather than
+   * being counted separately, which is one fewer number to fall out of step.
+   *
+   * It lives in the state and not in the web because a reload has no event
+   * history to count: a game is `seed + actions[]`, so replaying rebuilds this
+   * along with everything else. Games saved before it existed replay to the
+   * right number for free.
+   */
+  turn: number;
   phase: Phase;
   lastRoll?: [number, number];
   bank: ResourceBundle;

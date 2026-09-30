@@ -79,6 +79,10 @@ export interface PlayerView {
   readonly devCardPlayedThisTurn: boolean;
   readonly phase: Phase;
   readonly currentPlayer: PlayerId;
+  /** Turns played since the opening placement, from 1. Zero during setup. */
+  readonly turn: number;
+  /** A full lap of the turn order, from 1. Zero during setup. */
+  readonly round: number;
   readonly turnOrder: readonly PlayerId[];
   readonly lastRoll?: readonly [number, number];
   /** Offers are public: at a table everybody hears them (SPEC.md §4.9). */
@@ -88,6 +92,15 @@ export interface PlayerView {
   /** Everything this player could do right now, worked out by the engine. */
   readonly legalMoves: LegalMoves;
 }
+
+/**
+ * Which lap of the table a turn belongs to.
+ *
+ * Derived rather than stored: two counters that must agree are two counters
+ * that can disagree, and the seat count never changes once a game starts.
+ */
+export const roundOf = (turn: number, players: number): number =>
+  turn <= 0 || players <= 0 ? 0 : Math.floor((turn - 1) / players) + 1;
 
 const handSize = (resources: Readonly<ResourceBundle>): number =>
   resources.wood + resources.brick + resources.sheep + resources.wheat + resources.ore;
@@ -139,6 +152,8 @@ export const getPlayerView = (state: ReadonlyGameState, playerId: PlayerId): Pla
     tradeOffers: state.tradeOffers,
     phase: state.phase,
     currentPlayer: state.currentPlayer,
+    turn: state.turn,
+    round: roundOf(state.turn, state.turnOrder.length),
     turnOrder: [...state.turnOrder],
     ...(state.lastRoll === undefined ? {} : { lastRoll: [...state.lastRoll] as [number, number] }),
     ...(state.largestArmy === undefined ? {} : { largestArmy: state.largestArmy }),

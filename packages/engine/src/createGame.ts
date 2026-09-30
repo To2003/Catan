@@ -109,6 +109,7 @@ export const createGame = (seed: number, seats: readonly PlayerSeat[]): Readonly
     players: seats.map(seatToPlayer),
     turnOrder,
     currentPlayer: first,
+    turn: 0,
     phase: { kind: 'setup', round: 1, step: 'settlement' },
     bank: fullBank(),
     devDeck: deckDraw.value,

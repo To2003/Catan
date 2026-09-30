@@ -50,6 +50,10 @@ export function GameOverScreen() {
               : ''}
           </p>
         ) : null}
+        <p className="mt-1 text-[13px] text-guanaco-apagado">
+          Duró {view.round} ronda{view.round === 1 ? '' : 's'} · {view.turn} turno
+          {view.turn === 1 ? '' : 's'}
+        </p>
       </div>
 
       <table className="w-[28rem] text-sm">

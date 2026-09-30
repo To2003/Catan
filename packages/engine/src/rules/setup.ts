@@ -85,6 +85,8 @@ const advanceSetup = (draft: GameState, round: 1 | 2, events: GameEvent[]): void
     draft.phase = { kind: 'setup', round: 2, step: 'settlement' };
   } else {
     draft.currentPlayer = seatAt(0);
+    // The game proper starts here: this is turn 1, round 1.
+    draft.turn = 1;
     draft.phase = { kind: 'preRoll' };
   }
 
