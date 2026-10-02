@@ -16,3 +16,19 @@ if (!('ResizeObserver' in globalThis)) {
     disconnect(): void {}
   };
 }
+
+// jsdom has no matchMedia. The layout hooks use it to pick which of the
+// three shapes a panel takes; in a test the widest one is the useful default,
+// since that is the one with every anchor on screen.
+{
+  window.matchMedia = (query: string) => ({
+    matches: true,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  });
+}

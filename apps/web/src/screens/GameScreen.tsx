@@ -32,6 +32,8 @@ import { CodeText, EyeButton, useHiddenCode } from '../components/RoomCode.js';
 import { CostColumn } from '../components/CostColumn.js';
 import { DiceDock } from '../components/DiceDock.js';
 import { GameSettings, SETTINGS, useSetting } from '../components/GameSettings.js';
+import { TourRunner } from '../components/TourRunner.js';
+import { WELCOME_TOUR } from '../lib/tour.js';
 import { isMuted, setMuted, sounds } from '../lib/sounds.js';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
 import { RESOURCE_ICONS, TERRAIN_STYLES } from '../lib/terrainStyles.js';
@@ -385,6 +387,18 @@ export function GameScreen() {
         isMyTurn && scale > 0 ? 'turn-glow' : ''
       }`}
     >
+      <TourRunner
+        tour={WELCOME_TOUR}
+        busy={choosing !== null || owed !== undefined || roll !== undefined}
+        tips={{
+          seven: view.lastRoll !== undefined && view.lastRoll[0] + view.lastRoll[1] === 7,
+          robber: view.phase.kind === 'moveRobber' && isMyTurn,
+          offer: incoming.length > 0,
+          canBuild: isMyTurn && phase === 'main' && view.legalMoves.canAfford.settlement,
+          devCard: view.me.devCards.length > 0,
+        }}
+      />
+
       <header className="flex flex-wrap items-center gap-2.5 border-b border-chapa px-3 py-1.5">
         <h1 className="font-display text-lg tracking-tight text-guanaco">Tierra Austral</h1>
         <span className="font-display flex items-center gap-1 rounded-panel bg-chapa px-2 py-0.5 text-[13px] tracking-[0.2em]">
@@ -469,7 +483,7 @@ export function GameScreen() {
               hand is a row of the column, not something floating over the
               board: sat on top of it, the fan's outer cards hung past the
               bottom edge and the window cut them in half. */}
-          <div className="relative min-h-[38vh] flex-1 lg:min-h-0">
+          <div data-tour="board" className="relative min-h-[38vh] flex-1 lg:min-h-0">
             <Board
               board={view.board}
               robberHex={view.robberHex}
@@ -509,7 +523,10 @@ export function GameScreen() {
 
           {/* Padded past the dock so the hand centres in what is left of the
               board rather than under the dice. */}
-          <div className="pointer-events-none z-10 flex min-w-0 shrink-0 flex-col items-center gap-1 lg:pl-[240px]">
+          <div
+            data-tour="hand"
+            className="pointer-events-none z-10 flex min-w-0 shrink-0 flex-col items-center gap-1 lg:pl-[240px]"
+          >
             {owed !== undefined ? (
               <div className="pointer-events-auto flex items-center gap-3 rounded-panel bg-lenga px-3 py-1.5 text-sm shadow-lg">
                 <span className="font-semibold">
@@ -673,7 +690,7 @@ export function GameScreen() {
           ) : null}
 
           {/* 2. Who is playing. */}
-          <section>
+          <section data-tour="players">
             <h2 className="mb-1 text-[13px] font-semibold text-guanaco">Jugadores</h2>
             <PlayerList
               youAreHost={room?.hostId === view.you}
@@ -688,7 +705,7 @@ export function GameScreen() {
 
           {/* 3. Everything that can wait, behind tabs. */}
           <section className="flex min-h-0 flex-1 flex-col">
-            <div className="mb-2 flex gap-1">
+            <div data-tour="tabs" className="mb-2 flex gap-1">
               {(['cartas', 'comercio', 'chat', 'registro'] as const).map((name) => (
                 <button
                   key={name}

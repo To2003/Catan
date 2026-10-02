@@ -822,6 +822,50 @@ tablero en celular pasó de 286 a 313 px.
 
 ---
 
+## Pasada de UX después de jugar ✅
+
+### 1. El tooltip colgado (bug)
+
+Reproducido antes de tocar nada, con captura antes y después. De las tres
+hipótesis: **(a) un hex tapa la pata — falsa**, cero patas cruzan el interior de su hex; **(c) el
+color — falsa**. La causa era que el hover se limpiaba en el `onMouseLeave` del propio polígono, y
+al hacer click la fase cambia y esos polígonos **se desmontan**, así que el evento no llega nunca.
+Los bordes punteados de la captura **no** eran un estado colgado: son el resaltado normal de los
+candidatos y se van con la fase (medido: 0 polígonos tras el click).
+
+Un solo dueño (`useBoardHover`) con cuatro salidas, tres de las cuales no existían. Tooltip en
+portal. En táctil, primer toque muestra y segundo confirma. Y el ladrón se corrió del centro:
+estaba tapando el único número que uno quiere leer, el del hex bloqueado.
+
+### 2. Dock de dados
+
+Los dados bajaron de la barra superior a un dock abajo a la izquierda, con el último resultado
+siempre visible y un solo botón grande por fase. Los duplicados salieron del panel derecho, que
+ahora lleva la instrucción. Dos cosas salieron de medir: el dock pisaba la mano en 1366, y la mano
+de 11 cartas empujaba el panel derecho fuera de pantalla.
+
+### 3. Íconos en los hexes
+
+Grabados, del mismo dibujo que la carta de ese recurso. **Una sola fuente**: el arte salió de la
+carta a `ResourceGlyph.tsx` y ahora lo usan la carta, el hex y el puerto. Antes las cartas tenían
+SVG y el resto emojis, que se ven distinto en cada sistema operativo.
+
+### 4. Comercio
+
+El editor dejó de depender de seleccionar cartas en la mano. Dos filas de contadores, el resumen en
+castellano, chips de destinatario, y el motivo escrito cuando el botón está apagado. Las ofertas
+entrantes subieron arriba del panel con botones grandes, insignia, sonido y título de pestaña. El
+banco comparte el panel como segunda pestaña.
+
+### 5. Tutorial
+
+driver.js por import dinámico: queda en un chunk aparte de 25 kB que sólo baja quien ve un tour.
+Anclajes `data-tour`, nunca clases, **con un test que renderiza las pantallas reales y busca cada
+anclaje que el tour dice tener** — un tour es una segunda copia de la estructura de la interfaz, y
+sin eso un refactor lo rompe en silencio.
+
+---
+
 ## Decisiones tomadas sin consulta
 
 Pendientes de revisión. Todas se eligieron por el criterio "lo más conservador y consistente con el

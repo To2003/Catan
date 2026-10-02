@@ -348,3 +348,61 @@ body {
     animation: none;
   }
 }
+
+/* The tour's popover, in the game's own clothes rather than the library's. */
+.tour-popover.driver-popover {
+  background-color: var(--color-chapa);
+  color: var(--color-guanaco);
+  border-radius: var(--radius-panel);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.45);
+  max-width: 22rem;
+}
+
+.tour-popover .driver-popover-title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: var(--color-guanaco);
+}
+
+.tour-popover .driver-popover-description {
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--color-guanaco-apagado);
+}
+
+.tour-popover .driver-popover-progress-text {
+  color: var(--color-guanaco-apagado);
+  font-size: 0.8125rem;
+}
+
+.tour-popover .driver-popover-navigation-btns button {
+  background-color: var(--color-chapa-alta);
+  color: var(--color-guanaco);
+  border: none;
+  border-radius: var(--radius-panel);
+  text-shadow: none;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+}
+
+.tour-popover .driver-popover-navigation-btns button:last-child {
+  background-color: var(--color-estepa);
+  color: var(--color-noche);
+}
+
+.tour-popover .driver-popover-close-btn {
+  color: var(--color-guanaco-apagado);
+}
+
+.tour-popover .driver-popover-arrow-side-top {
+  border-top-color: var(--color-chapa);
+}
+.tour-popover .driver-popover-arrow-side-bottom {
+  border-bottom-color: var(--color-chapa);
+}
+.tour-popover .driver-popover-arrow-side-left {
+  border-left-color: var(--color-chapa);
+}
+.tour-popover .driver-popover-arrow-side-right {
+  border-right-color: var(--color-chapa);
+}

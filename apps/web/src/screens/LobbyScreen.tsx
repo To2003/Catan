@@ -14,6 +14,8 @@ import { LeaveButton } from '../components/LeaveButton.js';
 import { RulesButton } from '../components/Rules.js';
 import { SegmentedControl, type Segment } from '../components/SegmentedControl.js';
 import { Seat } from '../components/lobby/Seat.js';
+import { TourRunner } from '../components/TourRunner.js';
+import { LOBBY_TOUR } from '../lib/tour.js';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
 import { inviteLink } from '../lib/tokens.js';
 import { Board } from '../components/board/Board.js';
@@ -137,6 +139,7 @@ export function LobbyScreen() {
 
   return (
     <main className="flex h-dvh flex-col overflow-hidden bg-noche text-guanaco">
+      <TourRunner tour={LOBBY_TOUR} />
       <div className="lobby min-h-0 flex-1 p-3">
         {/* ── The room, and who is in it ──────────────────────────────── */}
         {/* Named because it scrolls: a scrollable region is a tab stop in
@@ -145,7 +148,7 @@ export function LobbyScreen() {
           aria-label="Sala y jugadores"
           className="lobby-sala flex min-h-0 flex-col gap-3 md:overflow-y-auto"
         >
-          <div className="rounded-panel bg-chapa p-4">
+          <div data-tour="room-code" className="rounded-panel bg-chapa p-4">
             <div className="flex items-center gap-1.5">
               <p className="text-[13px] text-guanaco-apagado">Código de la sala</p>
               <EyeButton hidden={hidden} onToggle={toggle} />
@@ -214,7 +217,7 @@ export function LobbyScreen() {
           aria-label="El tablero de la partida"
           className="lobby-tablero flex min-h-[20rem] flex-col gap-2 rounded-panel bg-chapa/40 p-3 md:min-h-0"
         >
-          <div className="flex flex-wrap items-center gap-2">
+          <div data-tour="board-mode" className="flex flex-wrap items-center gap-2">
             <SegmentedControl
               label="Cómo se arma el tablero"
               options={MODES}
@@ -258,7 +261,7 @@ export function LobbyScreen() {
 
         {/* ── The two buttons anybody came here to press ──────────────── */}
         <div className="lobby-acciones flex flex-col gap-2">
-          <div className="flex gap-2">
+          <div data-tour="ready" className="flex gap-2">
             <button
               type="button"
               aria-pressed={me?.ready ?? false}

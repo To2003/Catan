@@ -95,7 +95,7 @@ export function CostColumn({ canAfford, stock }: CostColumnProps) {
       // `order-last` because the component sits first in the row, which is
       // where a column belongs and where a drawer does not: on a phone the
       // row stacks, and the drawer goes at the foot.
-      <div className="order-last shrink-0 border-t border-chapa px-3 py-2">
+      <div data-tour="costs" className="order-last shrink-0 border-t border-chapa px-3 py-2">
         <button
           type="button"
           aria-expanded={open}
@@ -116,6 +116,7 @@ export function CostColumn({ canAfford, stock }: CostColumnProps) {
 
   return (
     <aside
+      data-tour="costs"
       aria-label="Costos de construcción"
       className={`relative flex shrink-0 flex-col border-r border-chapa bg-noche ${
         inColumn && open ? 'w-[220px] overflow-y-auto p-3' : 'w-auto'

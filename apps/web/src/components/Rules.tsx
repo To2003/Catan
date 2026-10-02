@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import source from '../../../../REGLAS.md?raw';
 import { parseMarkdown, type Block, type Inline } from '../lib/markdown.js';
 import { CostCard } from './CostCard.js';
+import { WELCOME_TOUR, forgetSeen, runTour } from '../lib/tour.js';
 
 function Text({ content }: { readonly content: readonly Inline[] }) {
   return (
@@ -147,8 +148,21 @@ export function RulesSheet({ onClose }: { readonly onClose: () => void }) {
           <h2 className="font-display text-lg text-guanaco">Cómo se juega</h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => {
+              // Replaying is the one case where "already seen" is wrong: you
+              // asked for it.
+              forgetSeen(WELCOME_TOUR.id);
+              onClose();
+              void runTour(WELCOME_TOUR.steps);
+            }}
             className="ml-auto rounded-panel bg-chapa px-3 py-1 text-[13px] font-semibold hover:bg-chapa-alta"
+          >
+            Repasar la interfaz
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-panel bg-chapa px-3 py-1 text-[13px] font-semibold hover:bg-chapa-alta"
           >
             Cerrar
           </button>
