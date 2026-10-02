@@ -52,6 +52,17 @@ Escala: 11 / 13 / 15 / 20 / 32 / 52. Los números del tablero y los puntajes van
   vértices y se trague esa pata entera. Las patas son madera clara sobre un filo oscuro, y los
   puertos se dibujan **encima** del terreno.
 
+- **Ícono de recurso en cada hex**: el mismo dibujo que la carta de ese recurso, **grabado** —
+  una copia oscura corrida un pelo hacia abajo debajo de una clara—, de un cuarto del hex y
+  arriba de la ficha. El número dice cada cuánto; el ícono dice de qué, que hasta ahora era un
+  color que había que haber aprendido. Grabado y no dibujado porque está hecho de los mismos dos
+  tonos que el terreno, y por eso sobrevive a los seis sin necesitar una caja alrededor. El
+  desierto lleva un sol: dejarlo vacío se lee como un ícono que no cargó.
+
+  **Un solo dibujo por recurso, en `ResourceGlyph.tsx`.** Antes las cartas tenían SVG y todo lo
+  demás —puertos, costos, avisos— usaba emojis, así que el juego hablaba dos idiomas visuales y
+  el segundo se veía distinto en cada sistema operativo.
+
 - **Fichas de número**: discos de esmalte. Crema, anillo fino oscuro, una sombra interior que
   las despega del terreno. El 6 y el 8 en rojo lenga, como siempre.
 - **Piezas**: casas con techo a dos aguas y un costado más oscuro, ciudades con **una torre

@@ -1,5 +1,6 @@
 import type { BoardGraph, Point, Port as PortModel } from '@tierra-austral/engine';
-import { RESOURCE_ICONS, RESOURCE_LABELS } from '../../lib/terrainStyles.js';
+import { RESOURCE_LABELS } from '../../lib/terrainStyles.js';
+import { GLYPH_BOX, RESOURCE_ART } from '../ResourceGlyph.js';
 
 interface PortProps {
   readonly port: PortModel;
@@ -122,18 +123,23 @@ export function Port({ port, board }: PortProps) {
         </text>
       ) : (
         <>
-          <text
-            x={badge.x}
-            y={badge.y - 0.09}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            fontSize={0.24}
+          {/* The same drawing as the card of that resource, not an emoji:
+              one visual language, and one that looks the same everywhere. */}
+          <svg
+            x={badge.x - 0.14}
+            y={badge.y - 0.23}
+            width={0.28}
+            height={0.28 * (48 / 36)}
+            viewBox={GLYPH_BOX}
+            fill="none"
+            style={{ color: '#f2e9d5' }}
+            overflow="visible"
           >
-            {RESOURCE_ICONS[port.type]}
-          </text>
+            {RESOURCE_ART[port.type].art}
+          </svg>
           <text
             x={badge.x}
-            y={badge.y + 0.15}
+            y={badge.y + 0.18}
             textAnchor="middle"
             dominantBaseline="middle"
             fontFamily="Chivo, sans-serif"

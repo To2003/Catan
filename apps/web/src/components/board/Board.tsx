@@ -10,6 +10,7 @@ import { DebugOverlay } from './DebugOverlay.js';
 import { Pieces } from './Pieces.js';
 import { HexTargets, Markers, SpotTargets } from './Targets.js';
 import { Hex } from './Hex.js';
+import { HexIcon } from './HexIcon.js';
 import { NumberToken } from './NumberToken.js';
 import { Port } from './Port.js';
 import { Robber } from './Robber.js';
@@ -46,6 +47,8 @@ interface BoardProps {
   readonly debug: boolean;
   /** Absent on the plain M1 board screen, which is not interactive. */
   readonly interaction?: BoardInteraction;
+  /** The resource mark carved into each hex. A setting, on by default. */
+  readonly icons?: boolean;
 }
 
 /**
@@ -62,7 +65,7 @@ const PADDING = 0.85;
  * as the shorter side allows, with the leftover going into margin instead of
  * into a smaller board.
  */
-export function Board({ board, robberHex, debug, interaction }: BoardProps) {
+export function Board({ board, robberHex, debug, interaction, icons = true }: BoardProps) {
   const { ref, size } = useElementSize<HTMLDivElement>();
 
   const bounds = geometryBounds(board);
@@ -104,6 +107,16 @@ export function Board({ board, robberHex, debug, interaction }: BoardProps) {
             );
           })}
         </g>
+        {icons ? (
+          <g>
+            {board.hexIds.map((id) => {
+              const hex = board.hexes[id];
+              if (!hex) return null;
+              return <HexIcon key={id} center={hex.center} terrain={hex.terrain} />;
+            })}
+          </g>
+        ) : null}
+
         <g>
           {board.hexIds.map((id) => {
             const hex = board.hexes[id];

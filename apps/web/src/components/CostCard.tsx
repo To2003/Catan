@@ -8,7 +8,8 @@ import {
   type Resource,
   type ResourceBundle,
 } from '@tierra-austral/engine';
-import { RESOURCE_ICONS, RESOURCE_LABELS } from '../lib/terrainStyles.js';
+import { RESOURCE_LABELS } from '../lib/terrainStyles.js';
+import { ResourceGlyph } from './ResourceGlyph.js';
 
 /**
  * What everything costs, and what everything is worth.
@@ -60,14 +61,13 @@ function Price({ cost }: { readonly cost: ResourceBundle }) {
     <span className="flex flex-wrap items-center gap-0.5">
       {RESOURCES.flatMap((resource: Resource) =>
         Array.from({ length: cost[resource] }, (_, index) => (
-          <span
+          <ResourceGlyph
             key={`${resource}-${index}`}
+            resource={resource}
+            size={14}
             title={RESOURCE_LABELS[resource]}
-            aria-label={RESOURCE_LABELS[resource]}
-            className="text-[15px] leading-none"
-          >
-            {RESOURCE_ICONS[resource]}
-          </span>
+            className="text-guanaco"
+          />
         )),
       )}
     </span>

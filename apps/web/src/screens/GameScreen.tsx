@@ -29,7 +29,7 @@ import { RulesButton } from '../components/Rules.js';
 import { CodeText, EyeButton, useHiddenCode } from '../components/RoomCode.js';
 import { CostColumn } from '../components/CostColumn.js';
 import { DiceDock } from '../components/DiceDock.js';
-import { GameSettings } from '../components/GameSettings.js';
+import { GameSettings, SETTINGS, useSetting } from '../components/GameSettings.js';
 import { isMuted, setMuted, sounds } from '../lib/sounds.js';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
 import { RESOURCE_ICONS, TERRAIN_STYLES } from '../lib/terrainStyles.js';
@@ -67,6 +67,7 @@ export function GameScreen() {
   const [muted, setMutedState] = useState(isMuted);
   const hiddenCode = useHiddenCode();
   const wide = useMediaQuery(WIDE_ENOUGH);
+  const hexIcons = useSetting(SETTINGS.hexIcons);
   // The engine's own bookkeeping in the log, behind the flag that already
   // exists for board ids.
   const debugLog = readDebugFromUrl();
@@ -427,6 +428,7 @@ export function GameScreen() {
               board={view.board}
               robberHex={view.robberHex}
               debug={false}
+              icons={hexIcons}
               interaction={{
                 buildings: view.buildings,
                 roads: view.roads,

@@ -1,5 +1,6 @@
 import type { PlayerColor, Terrain } from '@tierra-austral/engine';
 import { City, Road, Settlement } from '../components/board/Pieces.js';
+import { HexIcon } from '../components/board/HexIcon.js';
 import { TERRAIN_PATTERN_ID, TerrainPatterns } from '../components/board/TerrainPatterns.js';
 import { PLAYER_COLORS, PLAYER_COLOR_LABELS } from '../lib/playerColors.js';
 import { TERRAIN_STYLES } from '../lib/terrainStyles.js';
@@ -63,9 +64,12 @@ function Swatch({
         height={1.24}
         fill={`url(#${TERRAIN_PATTERN_ID[terrain]})`}
       />
-      <Road a={{ x: -0.95, y: 0.4 }} b={{ x: 0.95, y: 0.4 }} fill={fill} />
-      <Settlement x={-0.42} y={-0.02} fill={fill} />
-      <City x={0.42} y={-0.02} fill={fill} />
+      {/* The hex's own mark, so its contrast against each terrain is checked
+          in the same place as the pieces'. */}
+      <HexIcon center={{ x: 0, y: 0.26 }} terrain={terrain} />
+      <Road a={{ x: -0.95, y: 0.42 }} b={{ x: 0.95, y: 0.42 }} fill={fill} />
+      <Settlement x={-0.62} y={-0.04} fill={fill} />
+      <City x={0.62} y={-0.04} fill={fill} />
     </svg>
   );
 }
@@ -75,9 +79,10 @@ export function SpritesScreen() {
     <main className="min-h-dvh overflow-y-auto bg-noche p-6 text-guanaco">
       <h1 className="font-display text-2xl">Piezas sobre cada terreno</h1>
       <p className="mt-1 mb-6 max-w-2xl text-[13px] text-guanaco-apagado">
-        Camino, pueblo y ciudad, en los cuatro colores, sobre los seis terrenos. Arriba a 1x, que es
-        el tamaño de una partida en 1366×768; abajo a 2x, para mirar la silueta. Si un color se
-        pierde contra una textura, se ve acá y no en medio de una partida.
+        El ícono del terreno, y el camino, el pueblo y la ciudad en los cuatro colores, sobre los
+        seis terrenos. Arriba a 1x, que es el tamaño de una partida en 1366×768; abajo a 2x, para
+        mirar la silueta. Si un color se pierde contra una textura, se ve acá y no en medio de una
+        partida.
       </p>
 
       {[1, 2].map((zoom) => (
