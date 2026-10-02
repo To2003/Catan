@@ -19,7 +19,7 @@ import { Hand } from '../components/cards/Hand.js';
 import { FlyingCards } from '../components/effects/FlyingCards.js';
 import { RollOverlay } from '../components/effects/RollOverlay.js';
 import { Toasts } from '../components/effects/Toasts.js';
-import { TurnBanner } from '../components/TurnBanner.js';
+import { TurnBanner, waitingFor } from '../components/TurnBanner.js';
 import { RestartVote } from '../components/RestartVote.js';
 import { EventLog } from '../components/EventLog.js';
 import { PlayerList } from '../components/PlayerList.js';
@@ -28,14 +28,16 @@ import { LeaveButton } from '../components/LeaveButton.js';
 import { RulesButton } from '../components/Rules.js';
 import { CodeText, EyeButton, useHiddenCode } from '../components/RoomCode.js';
 import { CostColumn } from '../components/CostColumn.js';
-import { DiceRoll } from '../components/DiceRoll.js';
+import { DiceDock } from '../components/DiceDock.js';
+import { GameSettings } from '../components/GameSettings.js';
 import { isMuted, setMuted, sounds } from '../lib/sounds.js';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
 import { RESOURCE_ICONS, TERRAIN_STYLES } from '../lib/terrainStyles.js';
-import { SPEED_LABELS, speedScale, type AnimationSpeed } from '../lib/animation.js';
+import { speedScale } from '../lib/animation.js';
 import { BOARD_MODE_LABELS } from '../lib/boardModes.js';
 import { useGame } from '../store/gameStore.js';
 import { useBoardHover } from '../lib/useBoardHover.js';
+import { WIDE_ENOUGH, useMediaQuery } from '../lib/useMediaQuery.js';
 import { readDebugFromUrl } from '../lib/seed.js';
 import { FORCE_TURN_HINT_MS } from '../lib/timing.js';
 
@@ -64,6 +66,7 @@ export function GameScreen() {
   const pruneEffects = useGame((state) => state.pruneEffects);
   const [muted, setMutedState] = useState(isMuted);
   const hiddenCode = useHiddenCode();
+  const wide = useMediaQuery(WIDE_ENOUGH);
   // The engine's own bookkeeping in the log, behind the flag that already
   // exists for board ids.
   const debugLog = readDebugFromUrl();
@@ -294,15 +297,6 @@ export function GameScreen() {
 
   const isMyTurn = view.currentPlayer === view.you;
   const phase = view.phase.kind;
-  /**
-   * Which of the two turn buttons the panel offers at all.
-   *
-   * `legalMoves` still decides whether they work — this only stops the panel
-   * from showing a greyed-out "Tirar dados" through the whole placement, where
-   * nobody is ever going to roll. It is presentation, not a rule.
-   */
-  const showRoll = phase === 'preRoll';
-  const showEndTurn = phase === 'main';
   const inSetup = phase === 'setup';
   /**
    * Where the game is up to, in the words people use at the table.
@@ -321,6 +315,23 @@ export function GameScreen() {
   const canForce =
     room?.hostId === view.you && blocked !== undefined && now - blocked.since > FORCE_TURN_HINT_MS;
 
+  const dock = (
+    <DiceDock
+      dice={view.lastRoll}
+      roll={rolls}
+      phase={view.phase.kind}
+      moves={view.legalMoves}
+      onRoll={() => {
+        send({ type: 'rollDice' });
+      }}
+      onEndTurn={() => {
+        send({ type: 'endTurn' });
+      }}
+      setupHint={waitingFor(view, nameOf)}
+      urgent={isMyTurn && owed === undefined}
+    />
+  );
+
   return (
     <main
       className={`flex h-dvh flex-col overflow-hidden bg-stone-900 text-stone-100 ${
@@ -333,7 +344,6 @@ export function GameScreen() {
           <CodeText code={room?.code ?? ''} hidden={hiddenCode.hidden} />
           <EyeButton hidden={hiddenCode.hidden} onToggle={hiddenCode.toggle} className="-mr-1" />
         </span>
-        <DiceRoll dice={view.lastRoll} roll={rolls} />
         <span
           title="Una ronda es una vuelta completa a la mesa"
           className="font-display rounded-panel bg-chapa px-2 py-0.5 text-[13px]"
@@ -352,39 +362,17 @@ export function GameScreen() {
         ) : null}
 
         <div className="ml-auto flex items-center gap-2">
-          <label className="flex items-center gap-1.5 text-[13px] text-guanaco-apagado">
-            <span aria-hidden>✨</span>
-            <span>Animaciones</span>
-            <select
-              value={animation}
-              onChange={(event) => {
-                setAnimation(event.target.value as AnimationSpeed);
-              }}
-              aria-label="Velocidad de las animaciones"
-              className="rounded-panel bg-chapa px-1 py-1 text-[13px]"
-            >
-              {(['normal', 'fast', 'off'] as const).map((speed) => (
-                <option key={speed} value={speed}>
-                  {SPEED_LABELS[speed]}
-                </option>
-              ))}
-            </select>
-          </label>
           <RulesButton />
           <LeaveButton from="game" />
-          <button
-            type="button"
-            aria-pressed={muted}
-            title={muted ? 'Sonido apagado' : 'Sonido prendido'}
-            onClick={() => {
-              const next = !muted;
-              setMuted(next);
+          <GameSettings
+            animation={animation}
+            onAnimation={setAnimation}
+            muted={muted}
+            onMuted={(next) => {
               setMutedState(next);
+              setMuted(next);
             }}
-            className="rounded-panel bg-chapa px-2 py-1.5 text-sm hover:bg-chapa-alta"
-          >
-            {muted ? '🔇' : '🔊'}
-          </button>
+          />
         </div>
       </header>
 
@@ -420,7 +408,7 @@ export function GameScreen() {
         ) : null}
 
         <section
-          className="relative flex shrink-0 flex-col px-2 py-1 lg:min-h-0 lg:flex-1"
+          className="relative flex shrink-0 flex-col px-2 py-1 lg:min-h-0 lg:w-0 lg:min-w-0 lg:flex-1"
           onPointerLeave={() => {
             if (!hover.byTouch) hover.clear();
           }}
@@ -461,7 +449,19 @@ export function GameScreen() {
             />
           </div>
 
-          <div className="pointer-events-none z-10 flex shrink-0 flex-col items-center gap-1">
+          {/* Bottom-left of the board, over it rather than inside the costs
+              column — that one collapses to a tab and then to a drawer, and
+              the dice have to stay put. Rendered once: two copies would mean
+              two elements answering to the same `data-tour` anchor. */}
+          {wide ? (
+            <div className="pointer-events-none absolute bottom-2 left-3 z-20 w-[230px]">
+              {dock}
+            </div>
+          ) : null}
+
+          {/* Padded past the dock so the hand centres in what is left of the
+              board rather than under the dice. */}
+          <div className="pointer-events-none z-10 flex min-w-0 shrink-0 flex-col items-center gap-1 lg:pl-[240px]">
             {owed !== undefined ? (
               <div className="pointer-events-auto flex items-center gap-3 rounded-panel bg-lenga px-3 py-1.5 text-sm shadow-lg">
                 <span className="font-semibold">
@@ -496,6 +496,10 @@ export function GameScreen() {
               selectable={owed !== undefined || (isMyTurn && view.phase.kind === 'main')}
             />
           </div>
+
+          {/* Under 1024 there is no room beside the board, so the dock
+              becomes a bar with the main button across the full width. */}
+          {wide ? null : <div className="mt-1">{dock}</div>}
         </section>
 
         {hoveredHex !== undefined ? (
@@ -519,38 +523,15 @@ export function GameScreen() {
               The sentence itself lives there and only there — and when there
               is nothing to press, the panel is not there either. An empty
               strip of chrome reads as something that failed to load. */}
-          <section
-            className={`rounded-panel bg-chapa p-2 ${
-              showRoll || showEndTurn || blocked || view.legalMoves.stealTargets.length > 0
-                ? ''
-                : 'hidden'
-            }`}
-          >
-            <div className="flex flex-wrap gap-2">
-              {showRoll ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    send({ type: 'rollDice' });
-                  }}
-                  disabled={!view.legalMoves.canRoll}
-                  className="rounded-panel bg-estepa px-3 py-1.5 text-sm font-semibold text-noche disabled:bg-chapa-alta disabled:text-guanaco-apagado"
-                >
-                  Tirar dados
-                </button>
-              ) : null}
-              {showEndTurn ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    send({ type: 'endTurn' });
-                  }}
-                  disabled={!view.legalMoves.canEndTurn}
-                  className="rounded-panel bg-guanaco px-3 py-1.5 text-sm font-semibold text-noche disabled:bg-chapa-alta disabled:text-guanaco-apagado"
-                >
-                  Terminar turno
-                </button>
-              ) : null}
+          <section data-tour="turn-instruction" className="rounded-panel bg-chapa p-2">
+            {/* The phase's instruction, and nothing you could press: the
+                dice and the one big button live in the dock, and having them
+                here too was two of each. */}
+            <p className="font-display text-[15px] leading-snug text-guanaco">
+              {waitingFor(view, nameOf)}
+            </p>
+
+            <div className="mt-2 flex flex-wrap gap-2">
               {blocked ? (
                 <button
                   type="button"

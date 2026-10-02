@@ -32,7 +32,9 @@ export type Effect =
 
 /** How long each kind stays on screen at normal speed, in milliseconds. */
 const LIFETIME: Record<Effect['kind'], number> = {
-  roll: 2200,
+  // Shorter than it was: the dock keeps the result on screen now, so the
+  // overlay only has to announce the throw, not be the only place to read it.
+  roll: 1300,
   produce: 1800,
   blocked: 3500,
   scarcity: 5000,

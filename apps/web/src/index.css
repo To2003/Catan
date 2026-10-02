@@ -326,3 +326,25 @@ body {
 .lobby-chat {
   grid-area: chat;
 }
+
+/* The one pending action breathes. Slow and small: it is a nudge towards the
+   only thing left to do, not an alarm. */
+@keyframes pulse-soft {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(201 162 39 / 0);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgb(201 162 39 / 0.25);
+  }
+}
+
+.pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-soft {
+    animation: none;
+  }
+}

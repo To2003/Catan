@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { LegalMoves } from '@tierra-austral/engine';
 import { CostCard } from './CostCard.js';
+import { WIDE_ENOUGH } from '../lib/useMediaQuery.js';
 
 const KEY = 'tierra-austral:costos-abiertos';
 
@@ -8,7 +9,7 @@ const KEY = 'tierra-austral:costos-abiertos';
 type Room = 'column' | 'tab' | 'drawer';
 
 const WIDE = '(min-width: 1280px)';
-const MEDIUM = '(min-width: 1024px)';
+const MEDIUM = WIDE_ENOUGH;
 
 /**
  * Which of the three shapes fits, as a real media query rather than as CSS
