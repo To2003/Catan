@@ -27,7 +27,7 @@ import {
 import { Board } from '../components/board/Board.js';
 import { DiscardModal } from '../components/DiscardModal.js';
 import { ERROR_TEXT } from '../lib/errorText.js';
-import { TradePanel } from '../components/TradePanel.js';
+import { BankPanel } from '../components/trade/BankPanel.js';
 import { DevCardPanel } from '../components/DevCardPanel.js';
 import { ResourceChoiceModal } from '../components/ResourceChoiceModal.js';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
@@ -405,7 +405,7 @@ export function HotSeatScreen() {
             onPlay={onPlayCard}
           />
 
-          <TradePanel
+          <BankPanel
             rates={moves.maritimeRates}
             hand={activePlayer?.resources ?? { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 0 }}
             bank={game.bank}

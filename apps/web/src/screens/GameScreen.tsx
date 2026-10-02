@@ -12,8 +12,10 @@ import {
 import { Board } from '../components/board/Board.js';
 import { DevCardPanel } from '../components/DevCardPanel.js';
 import { ResourceChoiceModal } from '../components/ResourceChoiceModal.js';
-import { OfferPanel } from '../components/OfferPanel.js';
-import { TradePanel } from '../components/TradePanel.js';
+import { BankPanel } from '../components/trade/BankPanel.js';
+import { OfferEditor } from '../components/trade/OfferEditor.js';
+import { OfferList } from '../components/trade/OfferList.js';
+import { emptyPick, type Pick } from '../components/trade/ResourceStepper.js';
 import { Chat } from '../components/Chat.js';
 import { Hand } from '../components/cards/Hand.js';
 import { FlyingCards } from '../components/effects/FlyingCards.js';
@@ -90,6 +92,12 @@ export function GameScreen() {
    */
   const [picked, setPicked] = useState<Partial<ResourceBundle>>({});
   const [tab, setTab] = useState<'cartas' | 'comercio' | 'chat' | 'registro'>('cartas');
+  const [tradeWith, setTradeWith] = useState<'jugadores' | 'banco'>('jugadores');
+  /** The offer being answered with a counter, and the sides already swapped. */
+  const [countering, setCountering] = useState<string | null>(null);
+  const [counterPreset, setCounterPreset] = useState<
+    { give: Pick; want: Pick; to: string } | undefined
+  >(undefined);
 
   // A ticking clock, so the force-turn button lights up on its own rather than
   // reading the wall clock while rendering. The server is the one that enforces
@@ -222,20 +230,56 @@ export function GameScreen() {
     setPicked({});
   }, []);
 
+  /**
+   * Answering an offer with one of your own.
+   *
+   * The sides swap: what they asked for is what you would be giving. Filled
+   * in rather than blank, because a counteroffer is almost always a nudge to
+   * an offer that was nearly right.
+   */
+  const startCounter = useCallback(
+    (offer: {
+      id: string;
+      from: string;
+      give: Partial<ResourceBundle>;
+      want: Partial<ResourceBundle>;
+    }) => {
+      const fill = (bundle: Partial<ResourceBundle>): Pick => {
+        const pick = emptyPick();
+        for (const resource of RESOURCES) pick[resource] = bundle[resource] ?? 0;
+        return pick;
+      };
+      setCountering(offer.id);
+      setCounterPreset({ give: fill(offer.want), want: fill(offer.give), to: offer.from });
+      setTab('comercio');
+      setTradeWith('jugadores');
+    },
+    [],
+  );
+
   const onDiscard = useCallback(() => {
     send({ type: 'discard', cards: picked });
     setPicked({});
   }, [picked, send]);
 
   const myTurn = view?.currentPlayer === view?.you;
+  /** An offer waiting on your answer: the same kind of "you are up" as a turn. */
+  const waiting = (view?.tradeOffers ?? []).some(
+    (offer) => offer.responses[view?.you ?? ''] === 'pending',
+  );
+
+  useEffect(() => {
+    // The same short nudge as a turn landing on you, for the same reason.
+    if (waiting) sounds.turn();
+  }, [waiting]);
 
   useEffect(() => {
     if (!view) return;
-    document.title = myTurn ? '¡Tu turno! · Tierra Austral' : 'Tierra Austral';
+    document.title = myTurn || waiting ? '¡Tu turno! · Tierra Austral' : 'Tierra Austral';
     return () => {
       document.title = 'Tierra Austral';
     };
-  }, [myTurn, view]);
+  }, [myTurn, waiting, view]);
 
   useEffect(() => {
     // A short nudge when the turn lands on you, for the tab in the background.
@@ -311,6 +355,8 @@ export function GameScreen() {
       : `Ronda ${view.round}`;
   const pickedTotal = RESOURCES.reduce((sum, resource) => sum + (picked[resource] ?? 0), 0);
   const unreadChat = tab === 'chat' ? 0 : Math.max(0, chat.length - chatSeen);
+  /** Offers somebody is making to you, which are the ones that need an answer. */
+  const incoming = view.tradeOffers.filter((offer) => offer.from !== view.you);
   const owed = view.legalMoves.discardOwed;
   const blocked = room?.blockedBy;
   const canForce =
@@ -586,6 +632,35 @@ export function GameScreen() {
             ) : null}
           </section>
 
+          {/* An offer aimed at you is a decision waiting on you, so it goes
+              at the top of the panel rather than inside a tab you might not
+              have open. */}
+          {incoming.length > 0 ? (
+            <div data-tour="incoming-offer">
+              <h2 className="mb-1 text-[13px] font-semibold text-estepa">
+                Te ofrecen {incoming.length === 1 ? 'un cambio' : `${incoming.length} cambios`}
+              </h2>
+              <OfferList
+                you={view.you}
+                offers={view.tradeOffers}
+                moves={view.legalMoves}
+                nameOf={nameOf}
+                colorOf={colorOf}
+                mine={false}
+                onRespond={(offerId, response) => {
+                  send({ type: 'respondOffer', offerId, response });
+                }}
+                onConfirm={(offerId, withPlayer) => {
+                  send({ type: 'confirmTrade', offerId, withPlayer });
+                }}
+                onCancel={(offerId) => {
+                  send({ type: 'cancelOffer', offerId });
+                }}
+                onCounter={startCounter}
+              />
+            </div>
+          ) : null}
+
           {room ? (
             <RestartVote
               room={room}
@@ -629,6 +704,11 @@ export function GameScreen() {
                   }`}
                 >
                   {name}
+                  {name === 'comercio' && incoming.length > 0 ? (
+                    <span className="ml-1 rounded-full bg-estepa px-1 text-[12px] text-noche">
+                      {incoming.length}
+                    </span>
+                  ) : null}
                   {name === 'chat' && unreadChat > 0 ? (
                     <span className="ml-1 rounded-full bg-estepa px-1 text-[12px] text-noche">
                       {unreadChat}
@@ -657,41 +737,77 @@ export function GameScreen() {
               />
             ) : tab === 'comercio' ? (
               <div className="flex flex-col gap-3">
-                <OfferPanel
-                  you={view.you}
-                  hand={view.me.resources}
-                  give={picked}
-                  onClearGive={clearPicked}
-                  offers={view.tradeOffers}
-                  moves={view.legalMoves}
-                  nameOf={nameOf}
-                  players={view.players.map((player) => ({ id: player.id, name: player.name }))}
-                  onCreate={(give, want, to) => {
-                    send({ type: 'createOffer', give, want, to });
-                  }}
-                  onRespond={(offerId, response) => {
-                    send({ type: 'respondOffer', offerId, response });
-                  }}
-                  onCounter={(offerId, give, want) => {
-                    send({ type: 'counterOffer', offerId, give, want });
-                  }}
-                  onConfirm={(offerId, withPlayer) => {
-                    send({ type: 'confirmTrade', offerId, withPlayer });
-                  }}
-                  onCancel={(offerId) => {
-                    send({ type: 'cancelOffer', offerId });
-                  }}
-                />
+                {/* Two tabs over one panel: trading with a person and with
+                    the bank are the same question asked of someone else. */}
+                <div className="flex gap-1">
+                  {(['jugadores', 'banco'] as const).map((which) => (
+                    <button
+                      key={which}
+                      type="button"
+                      onClick={() => {
+                        setTradeWith(which);
+                      }}
+                      className={`flex-1 rounded-panel px-2 py-1 text-[13px] font-semibold capitalize ${
+                        tradeWith === which
+                          ? 'bg-chapa-alta text-guanaco'
+                          : 'bg-chapa text-guanaco-apagado'
+                      }`}
+                    >
+                      {which}
+                    </button>
+                  ))}
+                </div>
 
-                <TradePanel
-                  rates={view.legalMoves.maritimeRates}
-                  hand={view.me.resources}
-                  bank={view.bank}
-                  enabled={view.phase.kind === 'main'}
-                  onTrade={(give, want) => {
-                    send({ type: 'maritimeTrade', give, want });
-                  }}
-                />
+                {tradeWith === 'banco' ? (
+                  <BankPanel
+                    rates={view.legalMoves.maritimeRates}
+                    hand={view.me.resources}
+                    bank={view.bank}
+                    enabled={view.phase.kind === 'main' && view.currentPlayer === view.you}
+                    onTrade={(give, want) => {
+                      send({ type: 'maritimeTrade', give, want });
+                    }}
+                  />
+                ) : (
+                  <>
+                    <OfferEditor
+                      view={view}
+                      onSend={(give, want, to) => {
+                        if (countering) {
+                          send({ type: 'counterOffer', offerId: countering, give, want });
+                          setCountering(null);
+                        } else {
+                          send({ type: 'createOffer', give, want, to });
+                        }
+                      }}
+                      onClose={() => {
+                        setCountering(null);
+                      }}
+                      {...(counterPreset === undefined
+                        ? {}
+                        : { preset: counterPreset, title: 'Tu contraoferta' })}
+                    />
+
+                    <OfferList
+                      you={view.you}
+                      offers={view.tradeOffers}
+                      moves={view.legalMoves}
+                      nameOf={nameOf}
+                      colorOf={colorOf}
+                      mine
+                      onRespond={(offerId, response) => {
+                        send({ type: 'respondOffer', offerId, response });
+                      }}
+                      onConfirm={(offerId, withPlayer) => {
+                        send({ type: 'confirmTrade', offerId, withPlayer });
+                      }}
+                      onCancel={(offerId) => {
+                        send({ type: 'cancelOffer', offerId });
+                      }}
+                      onCounter={startCounter}
+                    />
+                  </>
+                )}
               </div>
             ) : tab === 'chat' ? (
               // The tab is the toggle, and the badge on it is the unread mark,
