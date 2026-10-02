@@ -73,6 +73,8 @@ interface HexTargetsProps {
   readonly hovered: HexId | undefined;
   readonly onHex: (hex: HexId) => void;
   readonly onHover: (hex: HexId | undefined) => void;
+  /** Touch only: the first tap shows the hint, the second one commits. */
+  readonly onTap?: (hex: HexId, at: { x: number; y: number }) => void;
 }
 
 /**
@@ -83,7 +85,15 @@ interface HexTargetsProps {
  * stay readable: the tint sits on the terrain and everything built on it keeps
  * its full colour.
  */
-export function HexTargets({ board, hexes, blocked, hovered, onHex, onHover }: HexTargetsProps) {
+export function HexTargets({
+  board,
+  hexes,
+  blocked,
+  hovered,
+  onHex,
+  onHover,
+  onTap,
+}: HexTargetsProps) {
   const cornersOf = (id: HexId): string =>
     (board.hexes[id]?.corners ?? [])
       .map((corner) => board.vertices[corner])
@@ -104,7 +114,13 @@ export function HexTargets({ board, hexes, blocked, hovered, onHex, onHover }: H
           strokeWidth={hovered === id ? 0.07 : 0.04}
           strokeDasharray="0.15 0.1"
           className="cursor-pointer"
-          onClick={() => {
+          onPointerUp={(event) => {
+            // A touch has no hover to have happened first, so the tap has to
+            // do both jobs: show who lives there, then move.
+            if (event.pointerType === 'touch' && onTap) {
+              onTap(id, { x: event.clientX, y: event.clientY });
+              return;
+            }
             onHex(id);
           }}
           onMouseEnter={() => {

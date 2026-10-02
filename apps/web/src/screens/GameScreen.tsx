@@ -35,6 +35,7 @@ import { RESOURCE_ICONS, TERRAIN_STYLES } from '../lib/terrainStyles.js';
 import { SPEED_LABELS, speedScale, type AnimationSpeed } from '../lib/animation.js';
 import { BOARD_MODE_LABELS } from '../lib/boardModes.js';
 import { useGame } from '../store/gameStore.js';
+import { useBoardHover } from '../lib/useBoardHover.js';
 import { readDebugFromUrl } from '../lib/seed.js';
 import { FORCE_TURN_HINT_MS } from '../lib/timing.js';
 
@@ -68,13 +69,16 @@ export function GameScreen() {
   const debugLog = readDebugFromUrl();
 
   const [choosing, setChoosing] = useState<'yearOfPlenty' | 'monopoly' | null>(null);
-  /** Which hex the pointer is over while the robber is being placed. */
-  const [hoveredHex, setHoveredHex] = useState<HexId | undefined>(undefined);
-  const [pointer, setPointer] = useState({ x: 0, y: 0 });
-  /** Whose longest route to trace on the board. */
-  const [hoveredRoute, setHoveredRoute] = useState<PlayerId | undefined>(undefined);
-  /** Whose buildings to ring, while picking somebody to rob. */
-  const [hoveredVictim, setHoveredVictim] = useState<PlayerId | undefined>(undefined);
+  /**
+   * Everything the board highlights on hover, with one owner.
+   *
+   * Keyed on the phase and whose turn it is, which is what makes the thing
+   * being hovered stop existing.
+   */
+  const hover = useBoardHover(`${view?.phase.kind ?? '-'}:${view?.currentPlayer ?? '-'}`);
+  const hoveredHex = hover.hex;
+  const hoveredRoute = hover.route;
+  const hoveredVictim = hover.victim;
   /**
    * Cards picked from the hand. One selection serves both jobs it can have —
    * paying a discard and building an offer — because you are never doing both
@@ -146,9 +150,31 @@ export function GameScreen() {
 
   const onHex = useCallback(
     (hex: HexId) => {
+      // Cleared here as well as on the phase change: the element that would
+      // have fired a mouseleave is about to stop existing.
+      hover.clear();
       send({ type: 'moveRobber', hex });
     },
-    [send],
+    [send, hover],
+  );
+
+  /**
+   * A tap on a candidate hex.
+   *
+   * There is no hover on a touch screen, so the first tap is the hover —
+   * it shows who the hex would hurt — and the second one, on the same hex or
+   * on the hint's own button, is the move.
+   */
+  const onHexTap = useCallback(
+    (hex: HexId, at: { x: number; y: number }) => {
+      if (hover.hex === hex && hover.byTouch) {
+        onHex(hex);
+        return;
+      }
+      hover.movePointer(at.x, at.y);
+      hover.setHex(hex, true);
+    },
+    [hover, onHex],
   );
 
   const onPlayCard = useCallback(
@@ -395,8 +421,13 @@ export function GameScreen() {
 
         <section
           className="relative flex shrink-0 flex-col px-2 py-1 lg:min-h-0 lg:flex-1"
+          onPointerLeave={() => {
+            if (!hover.byTouch) hover.clear();
+          }}
           onMouseMove={(event) => {
-            if (hoveredHex !== undefined) setPointer({ x: event.clientX, y: event.clientY });
+            if (hoveredHex !== undefined && !hover.byTouch) {
+              hover.movePointer(event.clientX, event.clientY);
+            }
           }}
         >
           {/* The board takes whatever is left once the hand has its band. The
@@ -421,7 +452,8 @@ export function GameScreen() {
                 onEdge,
                 onHex,
                 hoveredHex,
-                onHexHover: setHoveredHex,
+                onHexHover: hover.setHex,
+                onHexTap,
                 pulsingHexes,
                 markedVertices,
                 markedEdges,
@@ -467,7 +499,19 @@ export function GameScreen() {
         </section>
 
         {hoveredHex !== undefined ? (
-          <RobberHint view={view} hex={hoveredHex} at={pointer} nameOf={nameOf} />
+          <RobberHint
+            view={view}
+            hex={hoveredHex}
+            at={hover.pointer}
+            nameOf={nameOf}
+            {...(hover.byTouch
+              ? {
+                  onConfirm: () => {
+                    onHex(hoveredHex);
+                  },
+                }
+              : {})}
+          />
         ) : null}
 
         <aside className="flex w-full shrink-0 flex-col gap-3 border-t border-chapa bg-noche p-3 text-sm lg:w-[21rem] lg:min-w-[21rem] lg:overflow-y-auto lg:border-t-0 lg:border-l">
@@ -531,19 +575,22 @@ export function GameScreen() {
                         key={target}
                         type="button"
                         onClick={() => {
+                          // Same hole as the robber: these buttons unmount
+                          // the moment one is pressed.
+                          hover.clear();
                           send({ type: 'steal', target });
                         }}
                         onMouseEnter={() => {
-                          setHoveredVictim(target);
+                          hover.setVictim(target);
                         }}
                         onMouseLeave={() => {
-                          setHoveredVictim(undefined);
+                          hover.setVictim(undefined);
                         }}
                         onFocus={() => {
-                          setHoveredVictim(target);
+                          hover.setVictim(target);
                         }}
                         onBlur={() => {
-                          setHoveredVictim(undefined);
+                          hover.setVictim(undefined);
                         }}
                         className="rounded-panel bg-lenga px-2 py-1 text-[13px] font-semibold"
                       >
@@ -576,7 +623,7 @@ export function GameScreen() {
               connected={(id) =>
                 room?.seats.find((seat) => seat.playerId === id)?.connected ?? true
               }
-              onHoverRoute={setHoveredRoute}
+              onHoverRoute={hover.setRoute}
               gains={gains}
             />
           </section>

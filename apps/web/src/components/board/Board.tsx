@@ -30,6 +30,8 @@ export interface BoardInteraction {
   /** Which hex the pointer is over, while choosing where the robber goes. */
   readonly hoveredHex?: HexId | undefined;
   readonly onHexHover?: (hex: HexId | undefined) => void;
+  /** A tap on a touch screen, where the first one shows and the second moves. */
+  readonly onHexTap?: (hex: HexId, at: { x: number; y: number }) => void;
   /** Buildings to ring: who the robber would hit, or whose pieces to point at. */
   readonly markedVertices?: readonly VertexId[];
   /** Roads to trace: somebody's longest route, drawn so the number makes sense. */

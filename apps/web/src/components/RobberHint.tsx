@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import type { HexId, PlayerId, PlayerView } from '@tierra-austral/engine';
 import { PLAYER_COLORS } from '../lib/playerColors.js';
 import { TERRAIN_STYLES } from '../lib/terrainStyles.js';
@@ -8,6 +9,8 @@ interface RobberHintProps {
   /** Where the pointer is, in page coordinates. */
   readonly at: { readonly x: number; readonly y: number };
   readonly nameOf: (playerId: PlayerId) => string;
+  /** Shown on a touch screen, where a second tap is what confirms. */
+  readonly onConfirm?: () => void;
 }
 
 /**
@@ -17,7 +20,7 @@ interface RobberHintProps {
  * and how many cards they are holding — information that was on the screen but
  * had to be pieced together by eye.
  */
-export function RobberHint({ view, hex, at, nameOf }: RobberHintProps) {
+export function RobberHint({ view, hex, at, nameOf, onConfirm }: RobberHintProps) {
   const tile = view.board.hexes[hex];
   if (!tile) return null;
 
@@ -36,10 +39,18 @@ export function RobberHint({ view, hex, at, nameOf }: RobberHintProps) {
   const terrain = TERRAIN_STYLES[tile.terrain].label;
   const number = tile.number === undefined ? 'sin número' : `número ${tile.number}`;
 
-  return (
+  // In a portal: the hint has to sit above the board whatever the board's own
+  // stacking context is doing, and it is not part of the board's layout.
+  return createPortal(
     <div
-      className="pointer-events-none fixed z-30 w-56 rounded-lg border border-stone-600 bg-stone-900/95 p-2 text-xs shadow-xl"
-      style={{ left: Math.min(at.x + 16, window.innerWidth - 240), top: at.y + 16 }}
+      data-testid="robber-hint"
+      className={`fixed z-50 w-56 rounded-panel border border-chapa-alta bg-noche/95 p-2 text-[13px] shadow-xl ${
+        onConfirm === undefined ? 'pointer-events-none' : ''
+      }`}
+      style={{
+        left: Math.min(Math.max(at.x + 16, 8), window.innerWidth - 240),
+        top: Math.min(at.y + 16, window.innerHeight - 160),
+      }}
     >
       <p className="font-semibold">
         {terrain} · {number}
@@ -63,6 +74,17 @@ export function RobberHint({ view, hex, at, nameOf }: RobberHintProps) {
       )}
 
       {mine ? <p className="mt-1 text-stone-400">Ojo: también bloqueás un edificio tuyo</p> : null}
-    </div>
+
+      {onConfirm === undefined ? null : (
+        <button
+          type="button"
+          onClick={onConfirm}
+          className="mt-2 w-full rounded-panel bg-estepa px-3 py-2 text-[14px] font-semibold text-noche"
+        >
+          Mover acá
+        </button>
+      )}
+    </div>,
+    document.body,
   );
 }
