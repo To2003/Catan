@@ -1,4 +1,4 @@
-import { SETTINGS, settingEnabled } from '../components/GameSettings.js';
+import { SETTINGS, settingEnabled } from './settings.js';
 
 /**
  * The guided tours, as data.
@@ -164,6 +164,25 @@ export const forgetSeen = (id: string): void => {
   }
 };
 
+/**
+ * When the last tour closed.
+ *
+ * Without this, dismissing the welcome tour fired a contextual tip
+ * immediately and the overlay came straight back — you close one and land
+ * under the next, which is the opposite of staying out of the way. A tip has
+ * to wait for the screen to be yours again for a bit.
+ */
+let lastClosedAt = 0;
+
+/** How long the screen stays yours after you dismiss something. */
+const QUIET_MS = 25_000;
+
+export const quietAfterTour = (): boolean => Date.now() - lastClosedAt < QUIET_MS;
+
+export const noteTourClosed = (): void => {
+  lastClosedAt = Date.now();
+};
+
 /** Whether a tour may run at all right now. */
 export const toursEnabled = (): boolean => {
   if (!settingEnabled(SETTINGS.tips)) return false;
@@ -209,6 +228,7 @@ export const runTour = async (
     progressText: '{{current}} de {{total}}',
     popoverClass: 'tour-popover',
     onDestroyed: () => {
+      noteTourClosed();
       options.onDone?.();
     },
     steps: present.map((step) => ({

@@ -1,5 +1,13 @@
 import { useEffect, useRef } from 'react';
-import { TIPS, alreadySeen, markSeen, runTour, toursEnabled, type Tour } from '../lib/tour.js';
+import {
+  TIPS,
+  alreadySeen,
+  markSeen,
+  quietAfterTour,
+  runTour,
+  toursEnabled,
+  type Tour,
+} from '../lib/tour.js';
 
 interface TourRunnerProps {
   /** The walkthrough for this screen, shown once. */
@@ -29,11 +37,13 @@ export function TourRunner({ tour, tips, busy = false }: TourRunnerProps) {
   useEffect(() => {
     if (busy || running.current || !toursEnabled()) return;
 
-    const pending = alreadySeen(tour.id)
-      ? Object.entries(tips ?? {}).find(
-          ([key, now]) => now && !alreadySeen(`ayuda:${key}`) && TIPS[key] !== undefined,
-        )
-      : undefined;
+    // A tip never lands on top of something you just closed.
+    const pending =
+      alreadySeen(tour.id) && !quietAfterTour()
+        ? Object.entries(tips ?? {}).find(
+            ([key, now]) => now && !alreadySeen(`ayuda:${key}`) && TIPS[key] !== undefined,
+          )
+        : undefined;
 
     const start = async (): Promise<void> => {
       running.current = true;
@@ -66,9 +76,12 @@ export function TourRunner({ tour, tips, busy = false }: TourRunnerProps) {
 
     if (alreadySeen(tour.id) && !pending) return;
     // A tick late, so the thing being pointed at has finished rendering.
-    const timer = window.setTimeout(() => {
-      void start();
-    }, 400);
+    const timer = window.setTimeout(
+      () => {
+        void start();
+      },
+      alreadySeen(tour.id) ? 1200 : 400,
+    );
     return () => {
       window.clearTimeout(timer);
     };

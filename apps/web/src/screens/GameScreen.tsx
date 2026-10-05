@@ -31,7 +31,8 @@ import { RulesButton } from '../components/Rules.js';
 import { CodeText, EyeButton, useHiddenCode } from '../components/RoomCode.js';
 import { CostColumn } from '../components/CostColumn.js';
 import { DiceDock } from '../components/DiceDock.js';
-import { GameSettings, SETTINGS, useSetting } from '../components/GameSettings.js';
+import { GameSettings } from '../components/GameSettings.js';
+import { SETTINGS, useSetting } from '../lib/settings.js';
 import { TourRunner } from '../components/TourRunner.js';
 import { WELCOME_TOUR } from '../lib/tour.js';
 import { isMuted, setMuted, sounds } from '../lib/sounds.js';
@@ -98,7 +99,7 @@ export function GameScreen() {
   /** The offer being answered with a counter, and the sides already swapped. */
   const [countering, setCountering] = useState<string | null>(null);
   const [counterPreset, setCounterPreset] = useState<
-    { give: Pick; want: Pick; to: string } | undefined
+    { give: Pick; want: Pick; to: string; offerId: string } | undefined
   >(undefined);
 
   // A ticking clock, so the force-turn button lights up on its own rather than
@@ -252,7 +253,12 @@ export function GameScreen() {
         return pick;
       };
       setCountering(offer.id);
-      setCounterPreset({ give: fill(offer.want), want: fill(offer.give), to: offer.from });
+      setCounterPreset({
+        give: fill(offer.want),
+        want: fill(offer.give),
+        to: offer.from,
+        offerId: offer.id,
+      });
       setTab('comercio');
       setTradeWith('jugadores');
     },
@@ -787,24 +793,9 @@ export function GameScreen() {
                   />
                 ) : (
                   <>
-                    <OfferEditor
-                      view={view}
-                      onSend={(give, want, to) => {
-                        if (countering) {
-                          send({ type: 'counterOffer', offerId: countering, give, want });
-                          setCountering(null);
-                        } else {
-                          send({ type: 'createOffer', give, want, to });
-                        }
-                      }}
-                      onClose={() => {
-                        setCountering(null);
-                      }}
-                      {...(counterPreset === undefined
-                        ? {}
-                        : { preset: counterPreset, title: 'Tu contraoferta' })}
-                    />
-
+                    {/* What is already on the table before what you are still
+                        composing: an offer somebody just accepted is news, and
+                        it was ending up below a long form where nobody saw it. */}
                     <OfferList
                       you={view.you}
                       offers={view.tradeOffers}
@@ -822,6 +813,26 @@ export function GameScreen() {
                         send({ type: 'cancelOffer', offerId });
                       }}
                       onCounter={startCounter}
+                    />
+
+                    <OfferEditor
+                      view={view}
+                      onSend={(give, want, to) => {
+                        if (countering) {
+                          send({ type: 'counterOffer', offerId: countering, give, want });
+                          setCountering(null);
+                          setCounterPreset(undefined);
+                        } else {
+                          send({ type: 'createOffer', give, want, to });
+                        }
+                      }}
+                      onClose={() => {
+                        setCountering(null);
+                        setCounterPreset(undefined);
+                      }}
+                      {...(counterPreset === undefined
+                        ? {}
+                        : { preset: counterPreset, title: 'Tu contraoferta' })}
                     />
                   </>
                 )}

@@ -63,6 +63,13 @@ Escala: 11 / 13 / 15 / 20 / 32 / 52. Los números del tablero y los puntajes van
   demás —puertos, costos, avisos— usaba emojis, así que el juego hablaba dos idiomas visuales y
   el segundo se veía distinto en cada sistema operativo.
 
+  **Siluetas llenas, no línea.** La primera versión eran trazos finos: un dibujo técnico, preciso,
+  frío y casi invisible al tamaño al que se usan de verdad. Un juego de mesa quiere la **forma** de
+  la cosa, como la tiene una pieza de madera. Todo va en `currentColor` con el detalle interno a
+  menor opacidad del mismo color, y eso es lo que deja que un solo dibujo haga los dos trabajos:
+  pintado en su tono cálido (`RESOURCE_TONE`) en una carta o una ficha de comercio, y grabado en un
+  hex como dos copias corridas de oscuro y claro.
+
 - **Fichas de número**: discos de esmalte. Crema, anillo fino oscuro, una sombra interior que
   las despega del terreno. El 6 y el 8 en rojo lenga, como siempre.
 - **Piezas**: casas con techo a dos aguas y un costado más oscuro, ciudades con **una torre

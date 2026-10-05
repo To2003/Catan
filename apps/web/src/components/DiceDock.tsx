@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LegalMoves, Phase } from '@tierra-austral/engine';
-import { SETTINGS, settingEnabled } from './GameSettings.js';
+import { SETTINGS, settingEnabled } from '../lib/settings.js';
 
 const PIPS: Record<number, readonly [number, number][]> = {
   1: [[1, 1]],

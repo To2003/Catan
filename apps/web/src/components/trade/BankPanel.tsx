@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { RESOURCES, type Resource, type ResourceBundle } from '@tierra-austral/engine';
 import { RESOURCE_LABELS } from '../../lib/terrainStyles.js';
-import { ResourceGlyph } from '../ResourceGlyph.js';
+import { RESOURCE_TONE, ResourceGlyph } from '../ResourceGlyph.js';
 
 /** One row of five resources to pick from. */
 function Row({
@@ -40,14 +40,25 @@ function Row({
                 onClick={() => {
                   onPick(resource);
                 }}
-                className={`w-full rounded-panel p-1 text-center ${
-                  chosen === resource ? 'bg-estepa/25 ring-1 ring-estepa' : 'bg-chapa'
+                style={
+                  chosen === resource
+                    ? {
+                        backgroundColor: `${RESOURCE_TONE[resource]}2e`,
+                        borderColor: RESOURCE_TONE[resource],
+                      }
+                    : { borderColor: `${RESOURCE_TONE[resource]}44` }
+                }
+                className={`w-full rounded-panel border p-1 text-center ${
+                  chosen === resource ? '' : 'bg-chapa'
                 } ${off ? 'opacity-35' : 'hover:bg-chapa-alta'}`}
               >
                 <span className="flex justify-center">
                   <ResourceGlyph resource={resource} size={20} title={RESOURCE_LABELS[resource]} />
                 </span>
-                <span className="mt-0.5 block truncate text-[11px] text-guanaco-apagado">
+                <span
+                  className="mt-0.5 block truncate text-[11px] font-semibold"
+                  style={{ color: RESOURCE_TONE[resource] }}
+                >
                   {RESOURCE_LABELS[resource]}
                 </span>
                 <span className="font-display block text-[12px] text-glaciar">

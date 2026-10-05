@@ -187,6 +187,77 @@ describe('the shortcut for what you are missing', () => {
 });
 
 describe('a counteroffer', () => {
+  /** A view where it is somebody else's turn and you may counter `o1`. */
+  const offTurn = () => {
+    const view = viewWith();
+    return {
+      ...view,
+      currentPlayer: 'p2',
+      legalMoves: {
+        ...view.legalMoves,
+        // Off-turn, so you cannot *open* an offer…
+        canCreateOffer: false,
+        canEndTurn: false,
+        // …but you may answer the one aimed at you with a counter.
+        offers: {
+          o1: {
+            canAccept: true,
+            canReject: true,
+            canCounter: true,
+            canCancel: false,
+            confirmWith: [],
+          },
+        },
+      },
+    };
+  };
+
+  it('can be sent on somebody else’s turn, which is the whole point of it', async () => {
+    const onSend = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <OfferEditor
+        view={offTurn()}
+        onSend={onSend}
+        onClose={vi.fn()}
+        preset={{
+          give: { wood: 0, brick: 0, sheep: 1, wheat: 0, ore: 0 },
+          want: { wood: 1, brick: 0, sheep: 0, wheat: 0, ore: 0 },
+          to: 'p2',
+          offerId: 'o1',
+        }}
+      />,
+    );
+
+    // The bug: this asked `canCreateOffer`, which is false off-turn, so the
+    // button sat there dead saying "podés ofertar en tu turno".
+    const send = screen.getByRole('button', { name: 'Ofertar' });
+    expect(send).toBeEnabled();
+    expect(screen.queryByText(/en tu turno/)).not.toBeInTheDocument();
+
+    await user.click(send);
+    expect(onSend).toHaveBeenCalled();
+  });
+
+  it('says so when the offer it answers is gone', () => {
+    const view = offTurn();
+    render(
+      <OfferEditor
+        view={{ ...view, legalMoves: { ...view.legalMoves, offers: {} } }}
+        onSend={vi.fn()}
+        onClose={vi.fn()}
+        preset={{
+          give: { wood: 0, brick: 0, sheep: 1, wheat: 0, ore: 0 },
+          want: { wood: 1, brick: 0, sheep: 0, wheat: 0, ore: 0 },
+          to: 'p2',
+          offerId: 'o1',
+        }}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Ofertar' })).toBeDisabled();
+    expect(screen.getByText('Esa oferta ya no está abierta')).toBeInTheDocument();
+  });
+
   it('opens with the sides already swapped', () => {
     render(
       <OfferEditor
@@ -198,6 +269,7 @@ describe('a counteroffer', () => {
           give: { wood: 0, brick: 0, sheep: 1, wheat: 0, ore: 0 },
           want: { wood: 1, brick: 0, sheep: 0, wheat: 0, ore: 0 },
           to: 'p2',
+          offerId: 'o1',
         }}
       />,
     );

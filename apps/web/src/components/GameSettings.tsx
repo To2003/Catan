@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { SPEED_LABELS, type AnimationSpeed } from '../lib/animation.js';
+import { LOBBY_TOUR, TIPS, WELCOME_TOUR, forgetSeen, runTour } from '../lib/tour.js';
+import { SETTINGS, announceSettings, settingEnabled, writeSetting } from '../lib/settings.js';
 
 /**
  * A preference this browser keeps, with its default.
@@ -12,31 +14,6 @@ export interface Toggle {
   readonly label: string;
   readonly hint?: string;
 }
-
-const read = (key: string, fallback: boolean): boolean => {
-  try {
-    const saved = window.localStorage.getItem(key);
-    return saved === null ? fallback : saved === '1';
-  } catch {
-    return fallback;
-  }
-};
-
-const write = (key: string, on: boolean): void => {
-  try {
-    window.localStorage.setItem(key, on ? '1' : '0');
-  } catch {
-    // Blocked storage just resets the setting between sessions.
-  }
-};
-
-export const SETTINGS = {
-  confirmEndTurn: 'tierra-austral:confirmar-fin-turno',
-  hexIcons: 'tierra-austral:iconos-hex',
-  tips: 'tierra-austral:mostrar-ayudas',
-} as const;
-
-export const settingEnabled = (key: string): boolean => read(key, true);
 
 /**
  * Everything this browser can turn off, behind one gear.
@@ -84,7 +61,11 @@ export function GameSettings({
       hint: 'Avisa si todavía te alcanza para construir algo.',
     },
     { key: SETTINGS.hexIcons, label: 'Íconos en los hexes' },
-    { key: SETTINGS.tips, label: 'Mostrar ayudas' },
+    {
+      key: SETTINGS.tips,
+      label: 'Mostrar ayudas',
+      hint: 'Los carteles que explican la pantalla.',
+    },
   ];
 
   return (
@@ -142,11 +123,11 @@ export function GameSettings({
                 type="checkbox"
                 defaultChecked={settingEnabled(toggle.key)}
                 onChange={(event) => {
-                  write(toggle.key, event.target.checked);
+                  writeSetting(toggle.key, event.target.checked);
                   // Nothing else subscribes to localStorage, so a re-render
                   // of the tree is what applies it.
                   bump((n) => n + 1);
-                  window.dispatchEvent(new Event('tierra-austral:settings'));
+                  announceSettings();
                 }}
                 className="mt-0.5 size-4 shrink-0 accent-estepa"
               />
@@ -158,23 +139,29 @@ export function GameSettings({
               </span>
             </label>
           ))}
+          {/* Seeing a tour once is not the same as remembering it. The second
+              game is exactly when somebody wants it back, and until now the
+              only way was to clear the browser's storage. */}
+          <button
+            type="button"
+            onClick={() => {
+              forgetSeen(WELCOME_TOUR.id);
+              forgetSeen(LOBBY_TOUR.id);
+              for (const key of Object.keys(TIPS)) forgetSeen(`ayuda:${key}`);
+              writeSetting(SETTINGS.tips, true);
+              setOpen(false);
+              announceSettings();
+              void runTour(WELCOME_TOUR.steps);
+            }}
+            className="mt-3 w-full rounded-panel bg-chapa-alta px-3 py-2 text-[13px] font-semibold text-guanaco hover:bg-chapa"
+          >
+            Ver el tutorial de nuevo
+          </button>
+          <p className="mt-1 text-[12px] text-guanaco-apagado">
+            Vuelve a mostrar el recorrido y las ayudas, como la primera vez.
+          </p>
         </div>
       ) : null}
     </div>
   );
 }
-
-/** Re-reads a setting whenever the menu changes one. */
-export const useSetting = (key: string): boolean => {
-  const [on, setOn] = useState(() => settingEnabled(key));
-  useEffect(() => {
-    const update = (): void => {
-      setOn(settingEnabled(key));
-    };
-    window.addEventListener('tierra-austral:settings', update);
-    return () => {
-      window.removeEventListener('tierra-austral:settings', update);
-    };
-  }, [key]);
-  return on;
-};

@@ -66,7 +66,6 @@ function Price({ cost }: { readonly cost: ResourceBundle }) {
             resource={resource}
             size={14}
             title={RESOURCE_LABELS[resource]}
-            className="text-guanaco"
           />
         )),
       )}

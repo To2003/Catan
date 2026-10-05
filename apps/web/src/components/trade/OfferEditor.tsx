@@ -18,8 +18,17 @@ interface OfferEditorProps {
     to: PlayerId[] | 'all',
   ) => void;
   readonly onClose: () => void;
-  /** A counteroffer starts with the sides already swapped and filled in. */
-  readonly preset?: { readonly give: Pick; readonly want: Pick; readonly to: PlayerId };
+  /**
+   * A counteroffer: the sides already swapped and filled in, plus the offer
+   * it answers. That id matters — a counteroffer is allowed by a different
+   * rule than a fresh offer.
+   */
+  readonly preset?: {
+    readonly give: Pick;
+    readonly want: Pick;
+    readonly to: PlayerId;
+    readonly offerId: string;
+  };
   readonly title?: string;
 }
 
@@ -65,9 +74,24 @@ export function OfferEditor({ view, onSend, onClose, preset, title }: OfferEdito
     RESOURCES.map((resource) => [resource, want[resource] > 0]),
   );
 
-  /** The structural reasons come from the engine; the rest is what is missing. */
-  const why = !view.legalMoves.canCreateOffer
-    ? reasonFromMoves(view.legalMoves)
+  /**
+   * Whether the engine would take this, and why not.
+   *
+   * **A counteroffer is not an offer.** It is answered on somebody else's
+   * turn — that is the whole point of it — so asking `canCreateOffer` said
+   * "podés ofertar en tu turno" and left the button dead for exactly the
+   * people who were trying to use it. The permission for a counteroffer is
+   * `canCounter` on the offer being answered.
+   */
+  const allowed =
+    preset === undefined
+      ? view.legalMoves.canCreateOffer
+      : (view.legalMoves.offers[preset.offerId]?.canCounter ?? false);
+
+  const why = !allowed
+    ? preset === undefined
+      ? reasonFromMoves(view.legalMoves)
+      : 'Esa oferta ya no está abierta'
     : total(give) === 0
       ? 'Elegí qué das'
       : total(want) === 0

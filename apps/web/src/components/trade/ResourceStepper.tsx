@@ -1,6 +1,6 @@
 import { RESOURCES, type Resource, type ResourceBundle } from '@tierra-austral/engine';
 import { RESOURCE_LABELS } from '../../lib/terrainStyles.js';
-import { ResourceGlyph } from '../ResourceGlyph.js';
+import { RESOURCE_TONE, ResourceGlyph } from '../ResourceGlyph.js';
 
 export type Pick = Record<Resource, number>;
 
@@ -72,14 +72,27 @@ export function ResourceStepper({
           return (
             <li
               key={resource}
-              className={`rounded-panel p-1 text-center ${
-                count > 0 ? 'bg-estepa/20 ring-1 ring-estepa/50' : 'bg-chapa'
+              // Tinted with its own material, so a column of five reads as
+              // five different things at a glance instead of five grey boxes.
+              style={
+                count > 0
+                  ? {
+                      backgroundColor: `${RESOURCE_TONE[resource]}2e`,
+                      borderColor: RESOURCE_TONE[resource],
+                    }
+                  : { borderColor: `${RESOURCE_TONE[resource]}44` }
+              }
+              className={`rounded-panel border p-1 text-center ${
+                count > 0 ? '' : 'bg-chapa'
               } ${off ? 'opacity-35' : ''}`}
             >
               <span className="flex justify-center">
                 <ResourceGlyph resource={resource} size={20} title={RESOURCE_LABELS[resource]} />
               </span>
-              <span className="mt-0.5 block truncate text-[11px] text-guanaco-apagado">
+              <span
+                className="mt-0.5 block truncate text-[11px] font-semibold"
+                style={{ color: RESOURCE_TONE[resource] }}
+              >
                 {RESOURCE_LABELS[resource]}
               </span>
               {hand === undefined ? null : (
