@@ -1,5 +1,5 @@
 import { RESOURCES, type Resource, type ResourceBundle } from '@tierra-austral/engine';
-import { ResourceCard } from './ResourceCard.js';
+import { CARD_HEIGHT, ResourceCard } from './ResourceCard.js';
 
 interface HandProps {
   readonly hand: Readonly<ResourceBundle>;
@@ -16,12 +16,13 @@ const FAN_LIMIT = 12;
 /**
  * The band the hand lives in, in pixels.
  *
- * It is fixed and reserved by the layout rather than measured from the cards:
- * a card is 68px, lifting one picks it up 14px and fanning drops the outer
- * ones about 14px, and if the band were any tighter the screen edge would cut
- * the corner off the leftmost card.
+ * Reserved by the layout rather than measured from the cards, but derived
+ * from the card's own height so the two cannot drift: the card, plus room to
+ * lift one up and to let the fan's outer cards drop. If the band were any
+ * tighter the screen edge would cut the corner off the leftmost card, which
+ * is exactly what used to happen.
  */
-export const HAND_HEIGHT = 100;
+export const HAND_HEIGHT = CARD_HEIGHT + 36;
 
 /** With nothing in hand there is nothing to reserve: one line, and the board gets the rest. */
 export const EMPTY_HAND_HEIGHT = 22;

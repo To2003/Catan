@@ -22,8 +22,10 @@ import { RESOURCE_LABELS } from '../lib/terrainStyles.js';
  */
 const shownPrice = (row: HTMLElement): ResourceBundle => {
   const counted: Record<string, number> = {};
-  for (const icon of within(row).getAllByLabelText(/./)) {
-    const name = icon.getAttribute('aria-label') ?? '';
+  // Counted off the pictures themselves: each one names its resource, so the
+  // number of pictures *is* the price the card is charging.
+  for (const icon of within(row).getAllByRole('img')) {
+    const name = icon.getAttribute('alt') ?? icon.getAttribute('aria-label') ?? '';
     counted[name] = (counted[name] ?? 0) + 1;
   }
   return Object.fromEntries(

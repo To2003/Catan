@@ -163,7 +163,9 @@ export const RESOURCE_ART: Record<Resource, { band: string; ink: string; art: Re
 export const RESOURCE_TONE: Record<Resource, string> = {
   wood: '#4e8a5c',
   brick: '#c4643a',
-  sheep: '#e8e2d2',
+  // Wool is the pasture it comes off, not the colour of the fleece: cream on
+  // a dark panel reads as grey, and grey is what the ore already is.
+  sheep: '#8fc46a',
   wheat: '#e5b945',
   ore: '#93a6b6',
 };

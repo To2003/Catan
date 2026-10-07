@@ -1,8 +1,8 @@
 import type { Resource } from '@tierra-austral/engine';
 import { RESOURCE_LABELS } from '../../lib/terrainStyles.js';
-import { GLYPH_BOX, RESOURCE_ART } from '../ResourceGlyph.js';
+import { RESOURCE_ART } from '../ResourceGlyph.js';
+import { ResourceSprite } from '../ResourceSprite.js';
 
-/** The card stock, per resource: a band colour and a mark drawn in SVG. */
 interface ResourceCardProps {
   readonly resource: Resource;
   /** Shown as a badge when several identical cards are stacked into one. */
@@ -14,11 +14,23 @@ interface ResourceCardProps {
 }
 
 /**
+ * How big a card is, in pixels.
+ *
+ * Grown by half: at 50×68 the drawing on a card was a thumbnail of a
+ * thumbnail, and a hand is the thing you look at most in a turn. The hand
+ * band is sized off this, so changing it here moves everything that has to
+ * make room.
+ */
+export const CARD_WIDTH = 76;
+export const CARD_HEIGHT = 104;
+
+/**
  * One resource card.
  *
- * Cards rather than a row of numbers because that is what people are holding:
- * you pick cards up, you put them down, you hand them over. The illustrations
- * are inline SVG — a few lines each, sharp at any size, nothing to download.
+ * Cards rather than a row of numbers because that is what people are
+ * holding: you pick cards up, you put them down, you hand them over. The
+ * art is the painted bundle — logs, a bale of wool, a stack of bricks —
+ * which at this size has room to be seen.
  */
 export function ResourceCard({
   resource,
@@ -38,26 +50,29 @@ export function ResourceCard({
       onClick={onClick}
       title={title ?? RESOURCE_LABELS[resource]}
       aria-pressed={interactive ? selected : undefined}
-      className={`group relative block h-[68px] w-[50px] shrink-0 rounded-carta border-2 bg-[#efe6d3] text-left shadow-md transition-transform duration-150 ${
-        interactive ? 'cursor-pointer hover:-translate-y-2.5 focus-visible:-translate-y-2.5' : ''
-      } ${selected ? '-translate-y-3.5 ring-2 ring-estepa' : ''} ${dimmed ? 'opacity-45' : ''}`}
-      style={{ borderColor: style.band }}
+      style={{ borderColor: style.band, width: CARD_WIDTH, height: CARD_HEIGHT }}
+      className={`group relative block shrink-0 rounded-carta border-2 bg-[#efe6d3] text-left shadow-md transition-transform duration-150 ${
+        interactive ? 'cursor-pointer hover:-translate-y-3 focus-visible:-translate-y-3' : ''
+      } ${selected ? '-translate-y-4 ring-2 ring-estepa' : ''} ${dimmed ? 'opacity-45' : ''}`}
     >
       <span
-        className="absolute inset-x-0 top-0 h-2 rounded-t-[8px]"
+        className="absolute inset-x-0 top-0 h-2.5 rounded-t-[8px]"
         style={{ backgroundColor: style.band }}
       />
-      <svg viewBox={GLYPH_BOX} className="mt-1.5 h-[38px] w-full" style={{ color: style.ink }}>
-        {style.art}
-      </svg>
+
+      <span className="absolute inset-x-0 top-3 flex justify-center">
+        <ResourceSprite resource={resource} size={CARD_WIDTH - 18} decorative />
+      </span>
+
       <span
-        className="absolute inset-x-0 bottom-0.5 text-center text-[9px] leading-none font-semibold"
+        className="absolute inset-x-0 bottom-1 text-center text-[11px] leading-none font-semibold"
         style={{ color: style.ink }}
       >
         {RESOURCE_LABELS[resource]}
       </span>
+
       {count !== undefined && count > 1 ? (
-        <span className="font-display absolute -top-2 -right-2 rounded-full bg-noche px-1.5 text-[11px] font-bold text-guanaco ring-1 ring-guanaco/40">
+        <span className="font-display absolute -top-2 -right-2 rounded-full bg-noche px-2 text-[13px] font-bold text-guanaco ring-1 ring-guanaco/40">
           {count}
         </span>
       ) : null}

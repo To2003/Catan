@@ -26,6 +26,11 @@ ocres y los rojos de la estepa se vean cálidos contra él.
 Los cuatro colores de jugador (que son parte de las reglas) se reafinan dentro de esa familia:
 `celeste #5FA8D3`, `bordo #A63446`, `verde #4C8B5B`, `amarillo #E0B93F`.
 
+Cada recurso tiene además su propio tono cálido (`RESOURCE_TONE`), que es con el que se pinta su
+nombre y su ficha en el comercio. **La lana es verde pastizal, no crema**: el color del recurso es
+el del campo del que sale, y un crema sobre panel oscuro se lee gris — que es lo que ya es el
+mineral.
+
 ## Tipografía
 
 Dos familias, las dos de **Omnibus-Type, un taller tipográfico de Buenos Aires**. No es un
@@ -86,7 +91,17 @@ Escala: 11 / 13 / 15 / 20 / 32 / 52. Los números del tablero y los puntajes van
     el caso que lo forzó fue el verde sobre el pastizal. El halo además hace de sombra proyectada.
     Todo escala con una sola constante (`SCALE` en `Pieces.tsx`), hoy en 1,45.
 
-- **Cartas**: papel crema con el borde del color del recurso y una ilustración simple en SVG.
+- **Cartas**: papel crema con el borde del color del recurso y la ilustración pintada del recurso,
+  a 76×104 px. Antes medían 50×68 y el dibujo era la miniatura de una miniatura, cuando la mano es
+  lo que más mirás en un turno. La banda de la mano sale del alto de la carta, así que las dos no
+  se pueden desfasar; el tablero paga unos 40 px de alto por el cambio.
+
+- **Dos familias de arte por recurso, a propósito.** Las **ilustraciones pintadas**
+  (`public/recursos/*.webp`, unos 20 kB cada una, recortadas y con el fondo sacado) van donde hay
+  lugar para verlas: cartas, fichas de comercio, costos. Lo que las hace funcionar es el sombreado,
+  que es justo lo que SVG hace peor. Los **dibujos** de `ResourceGlyph.tsx` se quedan donde la
+  imagen tiene que ser chica o monocroma: el ícono del hex es un cuarto de hex y tiene que
+  sobrevivir grabado en seis terrenos, y una ilustración detallada a ese tamaño es barro.
 
 ## Jerarquía de pantalla
 

@@ -1,6 +1,7 @@
 import { RESOURCES, type Resource, type ResourceBundle } from '@tierra-austral/engine';
 import { RESOURCE_LABELS } from '../../lib/terrainStyles.js';
-import { RESOURCE_TONE, ResourceGlyph } from '../ResourceGlyph.js';
+import { RESOURCE_TONE } from '../ResourceGlyph.js';
+import { ResourceSprite } from '../ResourceSprite.js';
 
 export type Pick = Record<Resource, number>;
 
@@ -87,7 +88,7 @@ export function ResourceStepper({
               } ${off ? 'opacity-35' : ''}`}
             >
               <span className="flex justify-center">
-                <ResourceGlyph resource={resource} size={20} title={RESOURCE_LABELS[resource]} />
+                <ResourceSprite resource={resource} size={30} decorative />
               </span>
               <span
                 className="mt-0.5 block truncate text-[11px] font-semibold"

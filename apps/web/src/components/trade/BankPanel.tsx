@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { RESOURCES, type Resource, type ResourceBundle } from '@tierra-austral/engine';
 import { RESOURCE_LABELS } from '../../lib/terrainStyles.js';
-import { RESOURCE_TONE, ResourceGlyph } from '../ResourceGlyph.js';
+import { RESOURCE_TONE } from '../ResourceGlyph.js';
+import { ResourceSprite } from '../ResourceSprite.js';
 
 /** One row of five resources to pick from. */
 function Row({
@@ -53,7 +54,7 @@ function Row({
                 } ${off ? 'opacity-35' : 'hover:bg-chapa-alta'}`}
               >
                 <span className="flex justify-center">
-                  <ResourceGlyph resource={resource} size={20} title={RESOURCE_LABELS[resource]} />
+                  <ResourceSprite resource={resource} size={30} decorative />
                 </span>
                 <span
                   className="mt-0.5 block truncate text-[11px] font-semibold"

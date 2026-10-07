@@ -5,6 +5,7 @@ import {
   RESOURCES,
   applyAction,
   getPlayerView,
+  validateAction,
   type GameState,
   type ReadonlyGameState,
 } from '../src/index.js';
@@ -454,5 +455,87 @@ describe('what the view offers a player', () => {
     expect(getPlayerView(afterAccept, ANA.id).legalMoves.offers[offerId]?.confirmWith).toEqual([
       BRUNO.id,
     ]);
+  });
+});
+
+describe('an offer everybody turned down', () => {
+  /**
+   * It used to stay on the table until its author noticed and cancelled it,
+   * holding one of their three slots with an answer that had already come.
+   */
+  const offered = () => {
+    const base = draft(runSetup(), (state) => {
+      state.currentPlayer = ANA.id;
+      state.phase = { kind: 'main' };
+      give(state, ANA.id, { wood: 3 });
+      give(state, BRUNO.id, { ore: 3 });
+      give(state, CATA.id, { ore: 3 });
+    });
+    const state = applyOrThrow(base, ANA.id, {
+      type: 'createOffer',
+      give: { wood: 1 },
+      want: { ore: 1 },
+      to: [BRUNO.id, CATA.id],
+    }).state;
+    // Ids are `o<version>`, not a counter from one.
+    const id = state.tradeOffers[0]?.id ?? '';
+    return { state, id };
+  };
+
+  it('goes away on its own once the last no arrives', () => {
+    const open = offered();
+    const one = applyOrThrow(open.state, BRUNO.id, {
+      type: 'respondOffer',
+      offerId: open.id,
+      response: 'reject',
+    }).state;
+    // Still open: Cata has not answered.
+    expect(one.tradeOffers).toHaveLength(1);
+
+    const { state, events } = applyOrThrow(one, CATA.id, {
+      type: 'respondOffer',
+      offerId: open.id,
+      response: 'reject',
+    });
+    expect(state.tradeOffers).toHaveLength(0);
+    expect(events).toContainEqual({ type: 'OfferCancelled', offerId: open.id });
+  });
+
+  it('stays while anybody has said yes or has not answered', () => {
+    const open = offered();
+    const yes = applyOrThrow(open.state, BRUNO.id, {
+      type: 'respondOffer',
+      offerId: open.id,
+      response: 'accept',
+    }).state;
+    const { state } = applyOrThrow(yes, CATA.id, {
+      type: 'respondOffer',
+      offerId: open.id,
+      response: 'reject',
+    });
+    expect(state.tradeOffers).toHaveLength(1);
+  });
+
+  it('frees the slot, so you can offer again', () => {
+    const open = offered();
+    let state = applyOrThrow(open.state, BRUNO.id, {
+      type: 'respondOffer',
+      offerId: open.id,
+      response: 'reject',
+    }).state;
+    state = applyOrThrow(state, CATA.id, {
+      type: 'respondOffer',
+      offerId: open.id,
+      response: 'reject',
+    }).state;
+
+    expect(
+      validateAction(state, ANA.id, {
+        type: 'createOffer',
+        give: { wood: 1 },
+        want: { ore: 1 },
+        to: 'all',
+      }),
+    ).toBeNull();
   });
 });

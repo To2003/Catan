@@ -103,6 +103,18 @@ export const respondOffer = (
 
   offer.responses[playerId] = response === 'accept' ? 'accepted' : 'rejected';
   events.push({ type: 'OfferResponded', offerId, player: playerId, response });
+
+  // An offer everybody has turned down is over. It used to sit there until
+  // its author noticed and cancelled it, or until the turn ended — one of
+  // the three slots taken by an answer that already arrived.
+  //
+  // A counteroffer hanging off it goes too: it was an answer to this.
+  if (Object.values(offer.responses).every((answer) => answer === 'rejected')) {
+    draft.tradeOffers = draft.tradeOffers.filter(
+      (candidate) => candidate.id !== offerId && candidate.parentOfferId !== offerId,
+    );
+    events.push({ type: 'OfferCancelled', offerId });
+  }
 };
 
 export const counterOffer = (
